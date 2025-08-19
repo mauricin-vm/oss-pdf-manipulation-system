@@ -1,169 +1,188 @@
-# Sistema de Processamento de PDFs
+# PDF Processing System
 
-Sistema desenvolvido para processar arquivos PDF de votos vencedores, extrair páginas específicas e juntar com acórdãos completos.
+System developed to process PDF files from winning votes, extract specific pages and merge them with complete court decisions. Features advanced OCR-powered anonymization for LGPD compliance.
 
-## 🚀 Funcionalidades
+## 🚀 Features
 
-- **Upload de PDFs**: Interface intuitiva para upload de arquivos PDF
-- **Seleção de Páginas**: Especifique o intervalo de páginas do voto vencedor
-- **Busca Automática**: Localiza automaticamente o acórdão completo baseado no número do acórdão e RV
-- **Junção de Arquivos**: Mescla o acórdão completo com as páginas do voto vencedor
-- **Download Automático**: Gera e baixa o PDF final mesclado
+- **PDF Upload**: Intuitive interface for uploading PDF files
+- **Page Selection**: Specify the page range of the winning vote
+- **Automatic Search**: Automatically locates the complete court decision based on decision number and RV
+- **File Merging**: Merges the complete court decision with the winning vote pages
+- **OCR Text Extraction**: Advanced OCR using Google Cloud Vision API for scanned documents
+- **AI-Powered Anonymization**: Uses Gemini AI to anonymize sensitive data while preserving legal content
+- **LGPD Compliance**: Automatically removes CPF, names, addresses, and financial information
+- **Automatic Download**: Generates and downloads the final merged PDF
 
-## 📋 Pré-requisitos
+## 📋 Prerequisites
 
 - Node.js 18+ 
-- NPM ou Yarn
+- NPM or Yarn
 
-## 🛠️ Instalação
+## 🛠️ Installation
 
-1. Clone o repositório:
+1. Clone the repository:
 ```bash
-git clone [url-do-repositorio]
+git clone [repository-url]
 cd anonymization-system
 ```
 
-2. Instale as dependências:
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Configure as variáveis de ambiente:
+3. Configure environment variables:
 ```bash
 cp .env.example .env.local
 ```
 
-4. Edite o arquivo `.env.local` se necessário:
+4. Edit the `.env.local` file and configure the required services:
 ```env
+# Google Gemini AI API Key
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Google Cloud Vision API (for OCR on scanned PDFs)
+GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
+
+# Directory for court decisions
 ACCORDES_DIRECTORY=./accordes
 ```
 
-5. Crie a pasta para os acórdãos:
+### Setting up Google Cloud Vision API (for OCR):
+
+1. Create a Google Cloud Project: https://console.cloud.google.com/
+2. Enable the Vision API: https://console.cloud.google.com/apis/library/vision.googleapis.com
+3. Create a service account:
+   - Go to "IAM & Admin" > "Service Accounts"
+   - Click "Create Service Account"
+   - Give it a name and add the "Cloud Vision API User" role
+4. Generate and download the JSON key file
+5. Update `GOOGLE_APPLICATION_CREDENTIALS` in `.env.local` with the path to your JSON file
+
+### Setting up Gemini AI:
+
+1. Visit https://aistudio.google.com/app/apikey
+2. Generate an API key
+3. Add it to `GEMINI_API_KEY` in your `.env.local` file
+
+5. Create the folder for court decisions:
 ```bash
 mkdir accordes
 ```
 
-## 🚦 Como usar
+## 🚦 How to Use
 
-### 1. Executar a aplicação
+### 1. Run the application
 ```bash
 npm run dev
 ```
 
-### 2. Acessar a interface
-Abra o navegador em `http://localhost:3000`
+### 2. Access the interface
+Open your browser at `http://localhost:3000`
 
-### 3. Preparar os acórdãos completos
-- Coloque os arquivos PDF dos acórdãos completos na pasta `accordes/`
-- Nomeie os arquivos seguindo o padrão: `Acórdão XXXX-XXXX RV XXXX-XXXX.pdf`
+### 3. Prepare the complete court decisions
+- Place the complete court decision PDF files in the `accordes/` folder
+- Name the files following the pattern: `Acórdão XXXX-XXXX RV XXXX-XXXX.pdf`
 
-### 4. Processar um voto vencedor
-1. Faça upload do PDF que contém o voto vencedor
-2. Selecione o intervalo de páginas do voto (ex: página 15 até 25)
-3. Informe o número do acórdão (ex: 1234-2024)
-4. Informe o número RV (ex: 5678-2024) 
-5. Clique em "Processar PDF"
+### 4. Process a winning vote
+1. Upload the PDF containing the winning vote
+2. Select the page range of the vote (e.g., page 15 to 25)
+3. Enter the court decision number (e.g., 1234-2024)
+4. Enter the RV number (e.g., 5678-2024)
+5. Click "Process and Merge PDF"
 
-### 5. Resultado
-- O sistema irá:
-  - Extrair as páginas especificadas do upload
-  - Localizar o acórdão completo na pasta `accordes/`
-  - Juntar acórdão + voto vencedor
-  - Gerar download do PDF final
+### 5. Anonymize the document (optional)
+1. After merging, click "Anonymize PDF with AI + OCR"
+2. The system will:
+   - Use OCR to extract text from scanned documents
+   - Apply AI-powered anonymization to remove sensitive data
+   - Generate a new anonymized PDF
 
-## 📁 Estrutura do Projeto
+### 6. Result
+- **For PDF merging**: Downloads the merged court decision + winning vote
+- **For anonymization**: 
+  - ✅ **Success**: Downloads anonymized PDF with sensitive data removed
+  - ⚠️ **OCR Failed**: Downloads original merged PDF with notification that OCR couldn't extract text
+  - ⚠️ **AI Error**: Downloads original merged PDF if anonymization process failed
+
+## 📁 Project Structure
 
 ```
 src/
 ├── app/
-│   ├── api/process-pdf/     # API endpoint principal
-│   ├── globals.css          # Estilos globais
-│   ├── layout.tsx           # Layout da aplicação
-│   └── page.tsx            # Página principal
+│   ├── api/
+│   │   ├── process-pdf/    # PDF merging endpoint
+│   │   └── anonymize-pdf/  # OCR + anonymization endpoint
+│   ├── globals.css         # Global styles
+│   ├── layout.tsx          # Application layout
+│   └── page.tsx           # Main interface
 ├── components/
-│   ├── ui/                 # Componentes shadcn/ui
-│   ├── FileUpload.tsx      # Componente de upload
-│   └── PageRangeSelector.tsx # Seletor de páginas
+│   ├── ui/                # shadcn/ui components
+│   ├── FileUpload.tsx     # File upload component
+│   └── PageRangeSelector.tsx # Page range selector
 └── lib/
-    ├── file-service.ts     # Serviço de arquivos
-    ├── gemini-service.ts   # Integração com Gemini AI
-    └── pdf-service.ts      # Manipulação de PDFs
+    ├── file-service.ts    # File system operations
+    ├── pdf-service.ts     # PDF manipulation
+    ├── ocr-service.ts     # Google Cloud Vision OCR
+    └── gemini-service.ts  # AI-powered anonymization
 ```
 
-## ⚙️ Configurações Avançadas
+## ⚙️ Advanced Configuration
 
-### Configuração do Gemini AI
-1. Acesse https://aistudio.google.com/app/apikey
-2. Crie uma nova API key
-3. Configure no arquivo `.env.local`
+### Directory Configuration
+Change the `ACCORDES_DIRECTORY` variable in `.env.local` to point to your court decisions folder.
 
-### Personalização da Anonimização
-Edite o arquivo `src/lib/gemini-service.ts` para ajustar:
-- Tipos de dados a serem anonimizados
-- Padrões de substituição
-- Regras específicas de proteção
+## 🐛 Troubleshooting
 
-### Configuração de Diretórios
-Altere a variável `ACCORDES_DIRECTORY` no `.env.local` para apontar para sua pasta de acórdãos.
+### PDF Merging Issues
 
-## 🔒 Dados Anonimizados
+#### Error: "Court decision not found"
+- Check if the file is in the `accordes/` folder
+- Confirm the file name follows the correct pattern
+- Verify the court decision number and RV are correct
 
-O sistema anonimiza automaticamente:
+#### Upload error
+- Confirm the file is a valid PDF
+- Check if the file doesn't exceed 50MB
+- Try with a smaller file
 
-**Dados Pessoais:**
-- Nomes de pessoas físicas
-- CPF, RG, documentos pessoais
-- Endereços residenciais
-- Telefones e e-mails pessoais
-- Datas de nascimento
+#### Page range error
+- Ensure page numbers are within the PDF's page count
+- Check that start page is not greater than end page
+- Use valid page numbers (greater than 0)
 
-**Dados Fiscais:**
-- CNPJs (opcionalmente)
-- Valores monetários específicos
-- Contas bancárias
-- Números de cartões
-- Inscrições estaduais/municipais
+### OCR and Anonymization Issues
 
-**Dados Preservados:**
-- Nomes de empresas e razões sociais
-- Números de processos judiciais
-- Datas de decisões
-- Números de acórdãos e RVs
-- Fundamentos legais
-- Argumentos jurídicos
-- Nomes de magistrados e servidores
+#### OCR not working
+- Verify Google Cloud Vision API is properly configured
+- Check that `GOOGLE_APPLICATION_CREDENTIALS` points to a valid JSON file
+- Ensure the service account has the "Cloud Vision API User" role
+- Check the Google Cloud console for API usage and quota limits
 
-## 🐛 Solução de Problemas
+#### Gemini AI errors
+- Verify your `GEMINI_API_KEY` is correct and active
+- Check rate limits on the Gemini API
+- Large documents may take several minutes to process
 
-### Erro: "Acórdão não encontrado"
-- Verifique se o arquivo está na pasta `accordes/`
-- Confirme se o nome segue o padrão correto
-- Verifique se o número do acórdão e RV estão corretos
+#### Files downloaded without anonymization
+- This means either OCR failed to extract text (scanned PDF issue) or AI processing failed
+- Check browser console and server logs for specific error messages
+- For scanned PDFs, ensure image quality is sufficient for OCR
 
-### Erro: "Falha na anonimização"
-- Verifique se a API key do Gemini está configurada
-- Confirme se há conexão com a internet
-- Verifique os logs do console para mais detalhes
+## 📄 License
 
-### Erro de upload
-- Confirme que o arquivo é um PDF válido
-- Verifique se o arquivo não excede 50MB
-- Tente com um arquivo menor
+This project is licensed under the MIT License.
 
-## 📄 Licença
+## 🤝 Contributing
 
-Este projeto está licenciado sob a MIT License.
+Contributions are welcome! Please:
 
-## 🤝 Contribuições
+1. Fork the project
+2. Create a branch for your feature
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
-Contribuições são bem-vindas! Por favor:
+## 📞 Support
 
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
-
-## 📞 Suporte
-
-Para suporte técnico ou dúvidas sobre o sistema, abra uma issue no repositório do projeto.
+For technical support or questions about the system, please open an issue in the project repository.

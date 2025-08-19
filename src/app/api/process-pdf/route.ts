@@ -49,10 +49,10 @@ export async function POST(request: NextRequest) {
     // Para agora, retornar apenas o PDF mesclado (que funcionava)
     console.log('PDF processado com sucesso!')
 
-    return new NextResponse(mergedPdfBuffer, {
+    return new NextResponse(new Uint8Array(mergedPdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Acordao-${acordaoNumber}-RV-${rvNumber}-Anonimizado.pdf"`
+        'Content-Disposition': `attachment; filename="Acordao-${acordaoNumber}-RV-${rvNumber}.pdf"`
       }
     })
 
