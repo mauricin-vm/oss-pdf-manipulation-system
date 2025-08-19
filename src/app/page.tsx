@@ -1,103 +1,176 @@
-import Image from "next/image";
+'use client'
+
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
+import { FileUpload } from '@/components/FileUpload'
+import { PageRangeSelector } from '@/components/PageRangeSelector'
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [startPage, setStartPage] = useState<number>(1)
+  const [endPage, setEndPage] = useState<number>(1)
+  const [acordaoNumber, setAcordaoNumber] = useState('')
+  const [rvNumber, setRvNumber] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState<string | null>(null)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file)
+    setResult(null)
+  }
+
+  const handleProcess = async () => {
+    if (!selectedFile || !acordaoNumber || !rvNumber) {
+      alert('Por favor, preencha todos os campos obrigatórios.')
+      return
+    }
+
+    if (startPage <= 0 || endPage <= 0) {
+      alert('As páginas devem ser números maiores que zero.')
+      return
+    }
+
+    if (startPage > endPage) {
+      alert('A página inicial não pode ser maior que a página final.')
+      return
+    }
+
+    setIsProcessing(true)
+    setProgress(0)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('startPage', startPage.toString())
+      formData.append('endPage', endPage.toString())
+      formData.append('acordaoNumber', acordaoNumber)
+      formData.append('rvNumber', rvNumber)
+
+      const response = await fetch('/api/process-pdf', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Erro no processamento do arquivo')
+      }
+
+      const result = await response.blob()
+      
+      const url = URL.createObjectURL(result)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Acordao-${acordaoNumber}-RV-${rvNumber}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      setProgress(100)
+      setResult('PDF processado e download iniciado com sucesso!')
+    } catch (error) {
+      console.error('Erro:', error)
+      setResult('Erro no processamento do arquivo.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+
+  return (
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Sistema de Processamento de PDFs</h1>
+          <p className="text-gray-600 mt-2">
+            Extraia páginas de votos vencedores e junte com acórdãos completos
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload e Configuração</CardTitle>
+            <CardDescription>
+              Faça upload do PDF e configure os parâmetros de processamento
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FileUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} />
+            
+            {selectedFile && (
+              <>
+                <PageRangeSelector
+                  startPage={startPage}
+                  endPage={endPage}
+                  onStartPageChange={setStartPage}
+                  onEndPageChange={setEndPage}
+                />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="acordao">Número do Acórdão</Label>
+                    <Input
+                      id="acordao"
+                      placeholder="Ex: 1234-2024"
+                      value={acordaoNumber}
+                      onChange={(e) => setAcordaoNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rv">Número RV</Label>
+                    <Input
+                      id="rv"
+                      placeholder="Ex: 5678-2024"
+                      value={rvNumber}
+                      onChange={(e) => setRvNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {selectedFile && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Processamento</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isProcessing && (
+                <div className="space-y-2">
+                  <Progress value={progress} />
+                  <p className="text-sm text-gray-600 text-center">
+                    Processando arquivo...
+                  </p>
+                </div>
+              )}
+              
+              {result && (
+                <div className={`p-3 rounded-md ${
+                  result.includes('Erro') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                }`}>
+                  {result}
+                </div>
+              )}
+              
+              <Button 
+                onClick={handleProcess} 
+                disabled={isProcessing || !selectedFile || !acordaoNumber || !rvNumber}
+                className="w-full"
+              >
+                {isProcessing ? 'Processando...' : 'Processar PDF'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
-  );
+  )
 }
