@@ -6,7 +6,7 @@ export class FileService {
 
   constructor(customDirectory?: string) {
     // Pasta onde ficam os acórdãos completos
-    this.accordsDirectory = customDirectory || process.env.ACCORDES_DIRECTORY || path.join(process.cwd(), 'accordes')
+    this.accordsDirectory = customDirectory || path.join(process.cwd(), 'accordes')
 
     // Criar diretório se não existir
     if (!fs.existsSync(this.accordsDirectory)) {

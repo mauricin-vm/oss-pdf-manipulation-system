@@ -8,12 +8,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 interface SelectionArea {
   id: string
-  x: number
-  y: number
+  x: number // posição no canvas do visualizador
+  y: number // posição no canvas do visualizador
   width: number
   height: number
   pageNumber: number
-  scale: number // Adicionar escala para cálculos precisos
+  pageWidth: number;  // largura da página no visualizador
+  pageHeight: number; // altura da página no visualizador
+  scale: number
 }
 
 interface PdfViewerProps {
@@ -93,6 +95,8 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         width: realWidth,
         height: realHeight,
         pageNumber: currentPage,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
         scale: scale // Armazenar a escala usada
       }
 

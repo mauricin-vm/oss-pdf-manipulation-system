@@ -1,5 +1,6 @@
 'use client'
 
+import * as pdfjsLib from "pdfjs-dist/build/pdf";
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,11 +12,13 @@ import PdfViewer from '@/components/PdfViewer'
 
 interface SelectionArea {
   id: string
-  x: number
-  y: number
+  x: number // posição no canvas do visualizador
+  y: number // posição no canvas do visualizador
   width: number
   height: number
   pageNumber: number
+  pageWidth: number;  // largura da página no visualizador
+  pageHeight: number; // altura da página no visualizador
   scale: number
 }
 
@@ -182,72 +185,136 @@ export default function Home() {
     setSelectedAreas(selections)
   }
 
-  const handleAnonymize = async () => {
-    if (!mergedFile || selectedAreas.length === 0) {
-      alert('Selecione pelo menos uma área para anonimizar.')
-      return
+  const dataURLtoBlob = (dataUrl: string) => {
+    const arr = dataUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
     }
 
-    setIsAnonymizing(true)
-    setProgress(0)
+    return new Blob([u8arr], { type: mime });
+  };
+
+  const handleAnonymize = async () => {
+    if (!mergedFile || selectedAreas.length === 0) {
+      alert('Selecione pelo menos uma área para anonimizar.');
+      return;
+    }
+
+    setIsAnonymizing(true);
+    setProgress(0);
 
     try {
-      // Progresso simulado para anonimização
       const anonSteps = [
         { step: 15, message: '🔒 Carregando PDF...' },
         { step: 30, message: '🎯 Detectando áreas selecionadas...' },
-        { step: 50, message: '🛡️ Aplicando anonimização robusta...' },
-        { step: 75, message: '🔐 Processando múltiplas camadas...' },
+        { step: 50, message: '🛡️ Aplicando anonimização...' },
+        { step: 75, message: '🔐 Processando páginas...' },
         { step: 90, message: '📄 Gerando PDF final...' }
-      ]
+      ];
 
-      let currentStep = 0
+      let currentStep = 0;
       const anonInterval = setInterval(() => {
         if (currentStep < anonSteps.length) {
-          setProgress(anonSteps[currentStep].step)
-          setResult(anonSteps[currentStep].message)
-          currentStep++
+          setProgress(anonSteps[currentStep].step);
+          setResult(anonSteps[currentStep].message);
+          currentStep++;
         }
-      }, 400) // Um pouco mais lento para anonimização
+      }, 400);
 
-      const formData = new FormData()
-      formData.append('file', mergedFile, 'merged.pdf')
-      formData.append('acordaoNumber', acordaoNumber)
-      formData.append('rvNumber', rvNumber)
-      formData.append('selections', JSON.stringify(selectedAreas))
+      // 🔹 Carrega PDF com pdfjs
+      const pdf = await pdfjsLib.getDocument({ data: await mergedFile.arrayBuffer() }).promise;
+      const pagesImages: { pageNumber: number; dataUrl: string }[] = [];
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+
+        // Mantém escala 1 para tamanho original
+        const viewport = page.getViewport({ scale: 1 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d")!;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        // Seleções da página
+        const pageSelections = selectedAreas.filter(s => s.pageNumber === i);
+        ctx.fillStyle = "black";
+
+        pageSelections.forEach(sel => {
+          const scaleX = viewport.width / sel.pageWidth;
+          const scaleY = viewport.height / sel.pageHeight;
+
+          const x = sel.x * scaleX;
+          const y = sel.y * scaleY; // sem inverter
+          const width = sel.width * scaleX;
+          const height = sel.height * scaleY;
+
+          console.log(`Página ${i}`);
+          console.log(`Seleção PDF: x=${sel.x}, y=${sel.y}, w=${sel.width}, h=${sel.height}`);
+          console.log(`Canvas: x=${x}, y=${y}, w=${width}, h=${height}`);
+
+          ctx.fillStyle = "black";
+          ctx.fillRect(x, y, width, height);
+        });
+
+
+
+        const dataUrl = canvas.toDataURL("image/png");
+        pagesImages.push({ pageNumber: i, dataUrl });
+      }
+
+
+
+      // 🔹 Envia imagens para o backend
+      const formData = new FormData();
+      formData.append('acordaoNumber', acordaoNumber);
+      formData.append('rvNumber', rvNumber);
+
+      pagesImages.forEach((p, index) => {
+        const blob = dataURLtoBlob(p.dataUrl);
+        formData.append(`page_${index + 1}`, blob, `page_${index + 1}.png`);
+      });
 
       const response = await fetch('/api/anonymize-selected-areas', {
         method: 'POST',
         body: formData
-      })
+      });
 
-      clearInterval(anonInterval)
+      clearInterval(anonInterval);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Erro no processo de anonimização')
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro no processo de anonimização');
       }
 
-      const result = await response.blob()
-      const filename = `Acordao-${acordaoNumber}-RV-${rvNumber}-Anonimizado.pdf`
+      const resultBlob = await response.blob();
+      const filename = `Acórdão ${acordaoNumber} RV ${rvNumber}.pdf`;
 
-      const url = URL.createObjectURL(result)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const url = URL.createObjectURL(resultBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      setProgress(100)
-      setResult(`✅ PDF anonimizado com sucesso! ${selectedAreas.length} áreas foram anonimizadas.`)
+      setProgress(100);
+      setResult(`✅ PDF anonimizado com sucesso! ${selectedAreas.length} áreas foram anonimizadas.`);
+
     } catch (error) {
-      console.error('Erro na anonimização:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Erro na anonimização do arquivo'
-      setResult(`Erro na anonimização: ${errorMessage}`)
+      console.error('Erro na anonimização:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro na anonimização do arquivo';
+      setResult(`Erro na anonimização: ${errorMessage}`);
     } finally {
-      setIsAnonymizing(false)
+      setIsAnonymizing(false);
     }
   }
 
@@ -256,7 +323,7 @@ export default function Home() {
 
     const a = document.createElement('a')
     a.href = pdfUrl
-    a.download = `Acordao-${acordaoNumber}-RV-${rvNumber}-Original.pdf`
+    a.download = `Acórdão ${acordaoNumber} RV ${rvNumber}.pdf`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
