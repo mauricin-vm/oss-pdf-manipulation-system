@@ -1,5 +1,5 @@
 //importar bibliotecas e funções
-import './globals.css';
+import '@/app/globals.css';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 

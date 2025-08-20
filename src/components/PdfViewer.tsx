@@ -1,29 +1,31 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
-import { Document, Page, pdfjs } from 'react-pdf'
+//importar bibliotecas e funções
+import { Document, Page, pdfjs } from 'react-pdf';
+import { useState, useRef, useCallback } from 'react';
 
-// Configurar worker do PDF.js
+//configurar worker do PDF.js
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
 
+//função principal
 interface SelectionArea {
-  id: string
-  x: number // posição no canvas do visualizador
-  y: number // posição no canvas do visualizador
-  width: number
-  height: number
-  pageNumber: number
-  pageWidth: number;  // largura da página no visualizador
-  pageHeight: number; // altura da página no visualizador
+  id: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  pageNumber: number,
+  pageWidth: number,
+  pageHeight: number,
   scale: number
-}
-
+};
 interface PdfViewerProps {
-  pdfUrl: string
+  pdfUrl: string,
   onSelectionChange: (selections: SelectionArea[]) => void
-}
-
+};
 export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps) {
+
+  //definir constantes
   const [numPages, setNumPages] = useState<number>(0)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [selections, setSelections] = useState<SelectionArea[]>([])
@@ -33,61 +35,37 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
   const [scale, setScale] = useState<number>(1.0)
   const [pageSize, setPageSize] = useState<{ width: number, height: number } | null>(null)
 
+  //definir referências
   const pageRef = useRef<HTMLDivElement>(null)
 
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
-  }
-
-  const onPageLoadSuccess = (page: any) => {
-    // Armazenar o tamanho real da página para cálculos de coordenadas
-    setPageSize({
-      width: page.originalWidth,
-      height: page.originalHeight
-    })
-  }
-
+  //funções de gerenciamento do visualizador
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => setNumPages(numPages);
+  const onPageLoadSuccess = (page: any) => setPageSize({ width: page.originalWidth, height: page.originalHeight });
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
-    if (!pageRef.current || !pageSize) return
-
-    const rect = pageRef.current.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-
-    setIsSelecting(true)
-    setSelectionStart({ x, y })
-    setCurrentSelection({ x, y, width: 0, height: 0 })
-  }, [pageSize])
-
+    if (!pageRef.current || !pageSize) return;
+    const rect = pageRef.current.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    setIsSelecting(true);
+    setSelectionStart({ x, y });
+    setCurrentSelection({ x, y, width: 0, height: 0 });
+  }, [pageSize]);
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
-    if (!isSelecting || !selectionStart || !pageRef.current) return
-
-    const rect = pageRef.current.getBoundingClientRect()
-    const currentX = event.clientX - rect.left
-    const currentY = event.clientY - rect.top
-
-    const width = currentX - selectionStart.x
-    const height = currentY - selectionStart.y
-
-    setCurrentSelection({
-      x: width >= 0 ? selectionStart.x : currentX,
-      y: height >= 0 ? selectionStart.y : currentY,
-      width: Math.abs(width),
-      height: Math.abs(height)
-    })
-  }, [isSelecting, selectionStart])
-
+    if (!isSelecting || !selectionStart || !pageRef.current) return;
+    const rect = pageRef.current.getBoundingClientRect();
+    const currentX = event.clientX - rect.left;
+    const currentY = event.clientY - rect.top;
+    const width = currentX - selectionStart.x;
+    const height = currentY - selectionStart.y;
+    setCurrentSelection({ x: width >= 0 ? selectionStart.x : currentX, y: height >= 0 ? selectionStart.y : currentY, width: Math.abs(width), height: Math.abs(height) });
+  }, [isSelecting, selectionStart]);
   const handleMouseUp = useCallback(() => {
-    if (!isSelecting || !currentSelection || !pageRef.current || !pageSize) return
-
-    // Só adicionar se a seleção tiver tamanho mínimo
-    if (currentSelection.width > 10 && currentSelection.height > 10) {
-      // Converter coordenadas do visualizador para coordenadas do PDF real
+    if (!isSelecting || !currentSelection || !pageRef.current || !pageSize) return;
+    if (currentSelection.width > 5 && currentSelection.height > 5) {
       const realX = (currentSelection.x / scale)
       const realY = (currentSelection.y / scale)
       const realWidth = (currentSelection.width / scale)
       const realHeight = (currentSelection.height / scale)
-
       const newSelection: SelectionArea = {
         id: `selection-${Date.now()}-${Math.random()}`,
         x: realX,
@@ -97,44 +75,32 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         pageNumber: currentPage,
         pageWidth: pageSize.width,
         pageHeight: pageSize.height,
-        scale: scale // Armazenar a escala usada
-      }
-
-      const updatedSelections = [...selections, newSelection]
-      setSelections(updatedSelections)
-      onSelectionChange(updatedSelections)
-    }
-
-    setIsSelecting(false)
-    setSelectionStart(null)
-    setCurrentSelection(null)
-  }, [isSelecting, currentSelection, selections, currentPage, onSelectionChange, scale, pageSize])
-
+        scale: scale
+      };
+      const updatedSelections = [...selections, newSelection];
+      setSelections(updatedSelections);
+      onSelectionChange(updatedSelections);
+    };
+    setIsSelecting(false);
+    setSelectionStart(null);
+    setCurrentSelection(null);
+  }, [isSelecting, currentSelection, selections, currentPage, onSelectionChange, scale, pageSize]);
   const clearSelections = () => {
-    setSelections([])
-    onSelectionChange([])
-  }
-
+    setSelections([]);
+    onSelectionChange([]);
+  };
   const removeSelection = (id: string) => {
-    const updatedSelections = selections.filter(s => s.id !== id)
-    setSelections(updatedSelections)
-    onSelectionChange(updatedSelections)
-  }
+    const updatedSelections = selections.filter(s => s.id !== id);
+    setSelections(updatedSelections);
+    onSelectionChange(updatedSelections);
+  };
+  const handleZoomIn = () => setScale(prevScale => Math.min(prevScale + 0.2, 3.0));
+  const handleZoomOut = () => setScale(prevScale => Math.max(prevScale - 0.2, 0.5));
 
-  const handleZoomIn = () => {
-    setScale(prevScale => Math.min(prevScale + 0.2, 3.0))
-  }
-
-  const handleZoomOut = () => {
-    setScale(prevScale => Math.max(prevScale - 0.2, 0.5))
-  }
-
-  const resetZoom = () => {
-    setScale(1.0)
-  }
-
+  //retorno da função
   return (
     <div className="h-full flex flex-col">
+
       {/* Controles de navegação e zoom */}
       <div className="flex items-center justify-between p-4 border-b bg-gray-50">
         <div className="flex items-center gap-4">
@@ -283,5 +249,5 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         </div>
       </div>
     </div>
-  )
-}
+  );
+};

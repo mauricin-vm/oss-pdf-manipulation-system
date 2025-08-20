@@ -1,8 +1,10 @@
-import * as React from "react"
 
-import { cn } from "@/lib/utils"
+//importar bibliotecas e funções
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+//função de textarea
+function Textarea({ className, ...props }: React.ComponentProps<`textarea`>) {
   return (
     <textarea
       data-slot="textarea"
@@ -12,7 +14,6 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
       )}
       {...props}
     />
-  )
-}
-
-export { Textarea }
+  );
+};
+export { Textarea };

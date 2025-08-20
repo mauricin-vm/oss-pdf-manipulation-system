@@ -1,40 +1,33 @@
 'use client'
 
+//importar bibliotecas e funções
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+//função principal
 interface PageRangeSelectorProps {
-  startPage: number
-  endPage: number
-  onStartPageChange: (page: number) => void
-  onEndPageChange: (page: number) => void
+  startPage: number,
+  endPage: number,
+  onStartPageChange: (page: number) => void,
+  onEndPageChange: (page: number) => void,
   totalPages?: number | null
-}
+};
+export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEndPageChange, totalPages }: PageRangeSelectorProps) {
 
-export function PageRangeSelector({
-  startPage,
-  endPage,
-  onStartPageChange,
-  onEndPageChange,
-  totalPages
-}: PageRangeSelectorProps) {
+  //funções de gerenciamento do intervalo de páginas
   const handleStartPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value) || 1
+    const value = parseInt(event.target.value) || 1;
     if (value > 0) {
       onStartPageChange(value)
-      if (value > endPage) {
-        onEndPageChange(value)
-      }
-    }
-  }
-
+      if (value > endPage) onEndPageChange(value);
+    };
+  };
   const handleEndPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value) || 1
-    if (value >= startPage && value > 0) {
-      onEndPageChange(value)
-    }
-  }
+    const value = parseInt(event.target.value) || 1;
+    if (value >= startPage && value > 0) onEndPageChange(value);
+  };
 
+  //retorno da função
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -78,5 +71,5 @@ export function PageRangeSelector({
         {totalPages && ` O PDF possui ${totalPages} página${totalPages !== 1 ? 's' : ''} no total.`}
       </div>
     </div>
-  )
-}
+  );
+};

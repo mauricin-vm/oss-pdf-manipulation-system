@@ -1,41 +1,36 @@
 'use client'
 
+//importar bibliotecas e funções
 import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 
+//função principal
 interface FileUploadProps {
-  onFileSelect: (file: File) => void
+  onFileSelect: (file: File) => void,
   selectedFile: File | null
-}
-
+};
 export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
+
+  //definir referências
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  //funções de gerenciamento de upload de arquivo
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'application/pdf') {
-      onFileSelect(file)
-    } else {
-      alert('Por favor, selecione apenas arquivos PDF.')
-    }
-  }
-
+    const file = event.target.files?.[0];
+    if (file && file.type === `application/pdf`) onFileSelect(file);
+    else alert(`Por favor, selecione apenas arquivos PDF.`);
+  };
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const file = event.dataTransfer.files[0]
-    if (file && file.type === 'application/pdf') {
-      onFileSelect(file)
-    } else {
-      alert('Por favor, selecione apenas arquivos PDF.')
-    }
-  }
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file && file.type === `application/pdf`) onFileSelect(file);
+    else alert(`Por favor, selecione apenas arquivos PDF.`);
+  };
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => event.preventDefault();
 
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-  }
-
+  //retorno da função
   return (
     <div className="space-y-4">
       <Label>Arquivo do Voto Vencedor</Label>
@@ -99,5 +94,5 @@ export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
         </CardContent>
       </Card>
     </div>
-  )
-}
+  );
+};
