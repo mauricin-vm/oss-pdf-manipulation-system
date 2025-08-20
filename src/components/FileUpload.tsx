@@ -33,11 +33,10 @@ export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
   //retorno da função
   return (
     <div className="space-y-4">
-      <Label>Arquivo do Voto Vencedor</Label>
       <Card>
         <CardContent className="p-6">
           <div
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+            className="border-2 border-dashed border-gray-300 rounded-lg p-6 py-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => fileInputRef.current?.click()}

@@ -30,14 +30,6 @@ export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEnd
   //retorno da função
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Label>Intervalo de Páginas do Voto Vencedor</Label>
-        {totalPages && (
-          <span className="text-xs text-blue-600 font-medium">
-            PDF: {totalPages} página{totalPages !== 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="startPage" className="text-sm">Página Inicial</Label>
@@ -67,7 +59,7 @@ export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEnd
         </div>
       </div>
       <div className="text-xs text-gray-500">
-        Selecione o intervalo de páginas que contém o voto vencedor para ser extraído e processado.
+        Selecione o intervalo de páginas que contém o documento para ser extraído e processado.
         {totalPages && ` O PDF possui ${totalPages} página${totalPages !== 1 ? 's' : ''} no total.`}
       </div>
     </div>

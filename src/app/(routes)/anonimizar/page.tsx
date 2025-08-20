@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useState } from 'react';
 import { FileUpload } from '@/components/FileUpload';
 import { PageRangeSelector } from '@/components/PageRangeSelector';
@@ -41,6 +42,7 @@ export default function AnonymizationPage() {
   const [selectedAreas, setSelectedAreas] = useState<SelectionArea[]>([])
   const [isAnonymizing, setIsAnonymizing] = useState(false)
   const [pdfTotalPages, setPdfTotalPages] = useState<number | null>(null)
+  const [ignoreAcordaoMerge, setIgnoreAcordaoMerge] = useState(false)
   const [inputDirectory, setInputDirectory] = useState(() => {
     const defaultDir = process.env.NEXT_PUBLIC_DEFAULT_ACORDAOS_DIRECTORY || `Downloads`;
     if (defaultDir === `Downloads` && typeof window !== `undefined`) {
@@ -75,7 +77,8 @@ export default function AnonymizationPage() {
     };
   };
   const handleProcess = async () => {
-    if (!selectedFile || !acordaoNumber || !rvNumber) return alert(`Por favor, preencha todos os campos obrigatórios.`);
+    if (!selectedFile) return alert(`Por favor, selecione um arquivo.`);
+    if (!ignoreAcordaoMerge && (!acordaoNumber || !rvNumber)) return alert(`Por favor, preencha os campos de Acórdão e RV.`);
     if (startPage <= 0 || endPage <= 0) return alert(`As páginas devem ser números maiores que zero.`);
     if (startPage > endPage) return alert(`A página inicial não pode ser maior que a página final.`);
 
@@ -103,9 +106,10 @@ export default function AnonymizationPage() {
       formData.append(`file`, selectedFile)
       formData.append(`startPage`, startPage.toString())
       formData.append(`endPage`, endPage.toString())
-      formData.append(`acordaoNumber`, acordaoNumber)
-      formData.append(`rvNumber`, rvNumber)
+      formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber)
+      formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber)
       formData.append(`inputDirectory`, inputDirectory)
+      formData.append(`ignoreAcordaoMerge`, ignoreAcordaoMerge.toString())
 
       const response = await fetch(`/api/anonymize/process-pdf`, { method: `POST`, body: formData });
       clearInterval(progressInterval);
@@ -143,6 +147,7 @@ export default function AnonymizationPage() {
     setProgress(0);
     setIsAnonymizing(false);
     setPdfTotalPages(null);
+    setIgnoreAcordaoMerge(false);
     if (pdfUrl) {
       URL.revokeObjectURL(pdfUrl);
       setPdfUrl(null);
@@ -214,8 +219,8 @@ export default function AnonymizationPage() {
       };
 
       const formData = new FormData();
-      formData.append(`acordaoNumber`, acordaoNumber);
-      formData.append(`rvNumber`, rvNumber);
+      formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber);
+      formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber);
       pagesImages.forEach((p, index) => {
         const blob = dataURLtoBlob(p.dataUrl);
         formData.append(`page_${index + 1}`, blob, `page_${index + 1}.png`);
@@ -228,7 +233,9 @@ export default function AnonymizationPage() {
       };
 
       const resultBlob = await response.blob();
-      const filename = `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
+      const filename = ignoreAcordaoMerge 
+        ? `Documento Selecionado - Anonimizado.pdf`
+        : `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
       const url = URL.createObjectURL(resultBlob);
       const a = document.createElement(`a`);
       a.href = url;
@@ -253,7 +260,9 @@ export default function AnonymizationPage() {
 
     const a = document.createElement(`a`);
     a.href = pdfUrl;
-    a.download = `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
+    a.download = ignoreAcordaoMerge 
+      ? `Documento Selecionado.pdf`
+      : `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -329,9 +338,14 @@ export default function AnonymizationPage() {
                   <h3 className="font-semibold text-sm mb-2">Documento Processado</h3>
                   <div className="space-y-1 text-xs text-gray-600">
                     <p><strong>Arquivo:</strong> {selectedFile?.name}</p>
-                    <p><strong>Acórdão:</strong> {acordaoNumber}</p>
-                    <p><strong>RV:</strong> {rvNumber}</p>
+                    {!ignoreAcordaoMerge && (
+                      <>
+                        <p><strong>Acórdão:</strong> {acordaoNumber}</p>
+                        <p><strong>RV:</strong> {rvNumber}</p>
+                      </>
+                    )}
                     <p><strong>Páginas:</strong> {startPage} - {endPage}</p>
+                    {ignoreAcordaoMerge && <p><strong>Modo:</strong> Apenas documento selecionado</p>}
                   </div>
                 </div>
 
@@ -428,9 +442,24 @@ export default function AnonymizationPage() {
 
               {/* Etapa 2: Configuração */}
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 ${selectedFile ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>2</div>
-                  <h3 className={`font-semibold ${selectedFile ? 'text-gray-900' : 'text-gray-400'}`}>Configuração</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 ${selectedFile ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>2</div>
+                    <h3 className={`font-semibold ${selectedFile ? 'text-gray-900' : 'text-gray-400'}`}>Configuração</h3>
+                  </div>
+                  {selectedFile && (
+                    <Button
+                      onClick={() => {
+                        const url = URL.createObjectURL(selectedFile);
+                        window.open(url, '_blank');
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 px-2 cursor-pointer"
+                    >
+                      Ver PDF
+                    </Button>
+                  )}
                 </div>
 
                 {selectedFile ? (
@@ -443,27 +472,45 @@ export default function AnonymizationPage() {
                       totalPages={pdfTotalPages}
                     />
 
-                    <div className="space-y-2">
-                      <Label htmlFor="acordao" className="text-xs">Acórdão</Label>
-                      <Input
-                        id="acordao"
-                        placeholder="1234-2024"
-                        value={acordaoNumber}
-                        onChange={(e) => setAcordaoNumber(e.target.value)}
-                        className="text-sm"
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="ignore-acordao"
+                        checked={ignoreAcordaoMerge}
+                        onCheckedChange={(checked) => setIgnoreAcordaoMerge(checked)}
                       />
+                      <Label
+                        htmlFor="ignore-acordao"
+                        className="text-xs text-gray-600 cursor-pointer"
+                      >
+                        Ignorar acórdão (apenas documento selecionado)
+                      </Label>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="rv" className="text-xs">RV</Label>
-                      <Input
-                        id="rv"
-                        placeholder="5678-2024"
-                        value={rvNumber}
-                        onChange={(e) => setRvNumber(e.target.value)}
-                        className="text-sm"
-                      />
-                    </div>
+                    {!ignoreAcordaoMerge && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="acordao" className="text-xs">Acórdão</Label>
+                          <Input
+                            id="acordao"
+                            placeholder="1234-2024"
+                            value={acordaoNumber}
+                            onChange={(e) => setAcordaoNumber(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="rv" className="text-xs">RV</Label>
+                          <Input
+                            id="rv"
+                            placeholder="5678-2024"
+                            value={rvNumber}
+                            onChange={(e) => setRvNumber(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="text-gray-400 text-sm">Faça upload primeiro</div>
@@ -473,11 +520,11 @@ export default function AnonymizationPage() {
               {/* Etapa 3: Processamento */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 ${selectedFile && acordaoNumber && rvNumber ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>3</div>
-                  <h3 className={`font-semibold ${selectedFile && acordaoNumber && rvNumber ? 'text-gray-900' : 'text-gray-400'}`}>Processamento</h3>
+                  <div className={`w-8 h-8 ${selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>3</div>
+                  <h3 className={`font-semibold ${selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'text-gray-900' : 'text-gray-400'}`}>Processamento</h3>
                 </div>
 
-                {selectedFile && acordaoNumber && rvNumber ? (
+                {selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? (
                   <div className="space-y-2">
                     {isProcessing && (
                       <div className="space-y-2">

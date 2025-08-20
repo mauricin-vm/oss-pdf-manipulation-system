@@ -14,34 +14,47 @@ export async function POST(request: NextRequest) {
     const acordaoNumber = formData.get(`acordaoNumber`) as string;
     const rvNumber = formData.get(`rvNumber`) as string;
     const inputDirectory = formData.get(`inputDirectory`) as string;
-    if (!file || !acordaoNumber || !rvNumber) return NextResponse.json({ error: `Dados obrigatórios não fornecidos!` }, { status: 400 })
+    const ignoreAcordaoMerge = formData.get(`ignoreAcordaoMerge`) === `true`;
+    if (!file) return NextResponse.json({ error: `Arquivo não fornecido!` }, { status: 400 });
+    if (!ignoreAcordaoMerge && (!acordaoNumber || !rvNumber)) return NextResponse.json({ error: `Acórdão e RV são obrigatórios quando não ignorar mesclagem!` }, { status: 400 });
 
     const pdfService = new PDFService();
-    let accordsPath: string | undefined;
-    if (inputDirectory) {
-      let resolvedPath = inputDirectory;
-      if (resolvedPath.includes(`%USERNAME%`)) {
-        const username = process.env.USERNAME || process.env.USER || `Usuario`;
-        resolvedPath = resolvedPath.replace(`%USERNAME%`, username);
-      };
-
-      if (path.isAbsolute(resolvedPath)) accordsPath = resolvedPath;
-      else accordsPath = path.join(process.cwd(), resolvedPath);
-    };
-    const fileService = new FileService(accordsPath);
-
     const extractedPagesBuffer = await pdfService.extractPages(Buffer.from(await file.arrayBuffer()), startPage, endPage);
-    const acordaoFileName = `Acórdão ${acordaoNumber} RV ${rvNumber}`;
-    let acordaoBuffer: Buffer | null = null;
-    try {
-      acordaoBuffer = await fileService.findAcordaoFile(acordaoFileName);
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
-    };
-    if (!acordaoBuffer) return NextResponse.json({ error: `Acórdão não encontrado na pasta selecionada. O arquivo deve estar no formato "RV ${rvNumber}.pdf" ou "Acórdão ${acordaoNumber} RV ${rvNumber}.pdf"` }, { status: 404 });
-    const mergedPdfBuffer = await pdfService.mergePdfs(acordaoBuffer, extractedPagesBuffer)
+    let finalPdfBuffer: Buffer;
+    if (ignoreAcordaoMerge) {
+      finalPdfBuffer = extractedPagesBuffer;
+    } else {
+      let accordsPath: string | undefined;
+      if (inputDirectory) {
+        let resolvedPath = inputDirectory;
+        if (resolvedPath.includes(`%USERNAME%`)) {
+          const username = process.env.USERNAME || process.env.USER || `Usuario`;
+          resolvedPath = resolvedPath.replace(`%USERNAME%`, username);
+        };
 
-    return new NextResponse(new Uint8Array(mergedPdfBuffer), { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf"` } });
+        if (path.isAbsolute(resolvedPath)) accordsPath = resolvedPath;
+        else accordsPath = path.join(process.cwd(), resolvedPath);
+      };
+      const fileService = new FileService(accordsPath);
+
+      const acordaoFileName = `Acórdão ${acordaoNumber} RV ${rvNumber}`;
+      let acordaoBuffer: Buffer | null = null;
+      try {
+        acordaoBuffer = await fileService.findAcordaoFile(acordaoFileName);
+      } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      };
+      if (!acordaoBuffer) return NextResponse.json({ error: `Acórdão não encontrado na pasta selecionada. O arquivo deve estar no formato "RV ${rvNumber}.pdf" ou "Acórdão ${acordaoNumber} RV ${rvNumber}.pdf"` }, { status: 404 });
+      finalPdfBuffer = await pdfService.mergePdfs(acordaoBuffer, extractedPagesBuffer);
+    };
+    const filename = ignoreAcordaoMerge ? `Documento Mesclado.pdf` : `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
+
+    return new NextResponse(new Uint8Array(finalPdfBuffer), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`
+      }
+    });
 
   } catch (error) {
     console.error(`Erro no processamento:`, error);
