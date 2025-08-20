@@ -4,10 +4,10 @@ import * as path from 'path'
 export class FileService {
   private accordsDirectory: string
 
-  constructor() {
+  constructor(customDirectory?: string) {
     // Pasta onde ficam os acórdãos completos
-    this.accordsDirectory = process.env.ACCORDES_DIRECTORY || path.join(process.cwd(), 'accordes')
-    
+    this.accordsDirectory = customDirectory || process.env.ACCORDES_DIRECTORY || path.join(process.cwd(), 'accordes')
+
     // Criar diretório se não existir
     if (!fs.existsSync(this.accordsDirectory)) {
       fs.mkdirSync(this.accordsDirectory, { recursive: true })
@@ -19,7 +19,7 @@ export class FileService {
     try {
       // Buscar arquivos que contenham o padrão do acórdão
       const files = fs.readdirSync(this.accordsDirectory)
-      
+
       // Padrões de busca mais flexíveis
       const searchPatterns = [
         acordaoFileName,
@@ -34,7 +34,7 @@ export class FileService {
 
       // Busca exata primeiro
       for (const pattern of searchPatterns) {
-        const exactMatch = files.find(file => 
+        const exactMatch = files.find(file =>
           file.toLowerCase() === pattern.toLowerCase() ||
           file.toLowerCase() === `${pattern.toLowerCase()}.pdf`
         )
@@ -48,33 +48,38 @@ export class FileService {
       if (!matchedFile) {
         const acordaoNumber = acordaoFileName.match(/Acórdão\s+([^\s]+)/i)?.[1]
         const rvNumber = acordaoFileName.match(/RV\s+([^\s]+)/i)?.[1]
-        
+
         if (rvNumber) {
           // Busca apenas pelo RV se não encontrar o acórdão completo
-          matchedFile = files.find(file => 
+          matchedFile = files.find(file =>
             file.toLowerCase().includes(`rv`) &&
             file.toLowerCase().includes(rvNumber.toLowerCase()) &&
             file.toLowerCase().endsWith('.pdf')
           ) || null
         }
-        
+
         // Se ainda não encontrou, busca apenas pelo número do acórdão
         if (!matchedFile && acordaoNumber) {
-          matchedFile = files.find(file => 
+          matchedFile = files.find(file =>
             file.toLowerCase().includes(acordaoNumber.toLowerCase()) &&
             file.toLowerCase().endsWith('.pdf')
           ) || null
         }
-      }
 
-      if (!matchedFile) {
-        console.error(`Arquivo não encontrado: ${acordaoFileName}`)
-        console.log('Arquivos disponíveis:', files)
-        return null
+        // Se ainda não encontrou, lançar erro com mensagem específica
+        if (!matchedFile) {
+          console.error(`Arquivo não encontrado: ${acordaoFileName}`)
+          console.log('Arquivos disponíveis:', files)
+          console.log(`Diretório de busca: ${this.accordsDirectory}`)
+
+          const formatoCompletoEsperado = `RV ${rvNumber || 'XXXX-XXXX'}.pdf`
+          const formatoEsperado = `Acórdão ${acordaoNumber || 'XXXX-XXXX'} RV ${rvNumber || 'XXXX-XXXX'}.pdf`
+          throw new Error(`Acórdão não encontrado na pasta selecionada. O arquivo deve estar no formato "${formatoEsperado}" ou "${formatoCompletoEsperado}"`)
+        }
       }
 
       const filePath = path.join(this.accordsDirectory, matchedFile)
-      
+
       if (!fs.existsSync(filePath)) {
         console.error(`Arquivo não existe: ${filePath}`)
         return null
@@ -82,48 +87,10 @@ export class FileService {
 
       console.log(`Arquivo encontrado: ${matchedFile}`)
       return fs.readFileSync(filePath)
-      
+
     } catch (error) {
       console.error('Erro ao buscar arquivo de acórdão:', error)
       return null
     }
-  }
-
-  async listAvailableAccordes(): Promise<string[]> {
-    try {
-      if (!fs.existsSync(this.accordsDirectory)) {
-        return []
-      }
-
-      const files = fs.readdirSync(this.accordsDirectory)
-      return files.filter(file => file.toLowerCase().endsWith('.pdf'))
-      
-    } catch (error) {
-      console.error('Erro ao listar acórdãos:', error)
-      return []
-    }
-  }
-
-  async saveProcessedFile(fileName: string, buffer: Buffer): Promise<string> {
-    try {
-      const outputDir = path.join(process.cwd(), 'output')
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true })
-      }
-
-      const filePath = path.join(outputDir, fileName)
-      fs.writeFileSync(filePath, buffer)
-      
-      console.log(`Arquivo salvo: ${filePath}`)
-      return filePath
-      
-    } catch (error) {
-      console.error('Erro ao salvar arquivo:', error)
-      throw new Error('Falha ao salvar arquivo processado')
-    }
-  }
-
-  getAccordsDirectory(): string {
-    return this.accordsDirectory
   }
 }

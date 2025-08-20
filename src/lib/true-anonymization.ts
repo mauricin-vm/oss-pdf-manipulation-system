@@ -160,10 +160,10 @@ export class TrueAnonymization {
     height: number
   ): Promise<Buffer> {
     console.log(`🔬 Tentando pdf2image...`);
-    
+
     try {
       const pdf2image = await import('pdf2image');
-      
+
       const options = {
         density: 200,
         quality: 100,
@@ -176,11 +176,11 @@ export class TrueAnonymization {
       const fs = await import('fs');
       const path = await import('path');
       const tempPdfPath = path.join(process.cwd(), `temp_page_${pageIndex}.pdf`);
-      
+
       await fs.promises.writeFile(tempPdfPath, pdfBuffer);
-      
+
       const result = await pdf2image.convertPdf(tempPdfPath, options);
-      
+
       // Limpar arquivo temporário
       try {
         await fs.promises.unlink(tempPdfPath);
@@ -193,9 +193,9 @@ export class TrueAnonymization {
         console.log(`📸 pdf2image: ${imageBuffer.length} bytes`);
         return imageBuffer;
       }
-      
+
       throw new Error('pdf2image não retornou resultado válido');
-      
+
     } catch (error: any) {
       console.log(`❌ pdf2image falhou: ${error.message}`);
       throw error;
@@ -209,7 +209,7 @@ export class TrueAnonymization {
     height: number
   ): Promise<Buffer> {
     console.log(`🔬 Tentando pdf.js-extract + canvas...`);
-    
+
     try {
       const pdfExtract = await import('pdf.js-extract');
       const PDFExtract = pdfExtract.PDFExtract;
@@ -224,7 +224,7 @@ export class TrueAnonymization {
       }) as any;
 
       console.log(`📊 Extraído: ${data.pages.length} páginas`);
-      
+
       if (!data.pages[pageIndex]) {
         throw new Error(`Página ${pageIndex + 1} não encontrada`);
       }
@@ -235,9 +235,9 @@ export class TrueAnonymization {
       // Renderizar conteúdo real no canvas
       const imageBuffer = await this.renderRealContentToCanvas(pageData, width, height);
       console.log(`🎨 Canvas renderizado: ${imageBuffer.length} bytes`);
-      
+
       return imageBuffer;
-      
+
     } catch (error: any) {
       console.log(`❌ pdf.js-extract falhou: ${error.message}`);
       throw error;
@@ -251,7 +251,7 @@ export class TrueAnonymization {
     height: number
   ): Promise<Buffer> {
     console.log(`🔬 Fallback: Canvas com representação visual...`);
-    
+
     try {
       const scale = 2;
       const canvasWidth = Math.floor(width * scale);
@@ -269,9 +269,9 @@ export class TrueAnonymization {
 
       const imageBuffer = canvas.toBuffer('image/png');
       console.log(`🎨 Fallback canvas: ${imageBuffer.length} bytes`);
-      
+
       return imageBuffer;
-      
+
     } catch (error: any) {
       console.log(`❌ Canvas fallback falhou: ${error.message}`);
       throw error;

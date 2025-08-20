@@ -38,7 +38,7 @@ export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
 
   return (
     <div className="space-y-4">
-      <Label>Arquivo PDF</Label>
+      <Label>Arquivo do Voto Vencedor</Label>
       <Card>
         <CardContent className="p-6">
           <div
@@ -54,7 +54,7 @@ export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
               onChange={handleFileChange}
               className="hidden"
             />
-            
+
             {selectedFile ? (
               <div className="space-y-2">
                 <div className="text-green-600 font-medium">

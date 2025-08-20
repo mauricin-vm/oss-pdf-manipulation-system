@@ -34,6 +34,23 @@ export default function Home() {
   const [selectedAreas, setSelectedAreas] = useState<SelectionArea[]>([])
   const [isAnonymizing, setIsAnonymizing] = useState(false)
   const [pdfTotalPages, setPdfTotalPages] = useState<number | null>(null)
+  const [inputDirectory, setInputDirectory] = useState(() => {
+    // Usar variável de ambiente ou fallback
+    const defaultDir = process.env.NEXT_PUBLIC_DEFAULT_ACORDAOS_DIRECTORY || 'Downloads'
+
+    // Se for "Downloads", tentar construir o caminho completo para Windows
+    if (defaultDir === 'Downloads' && typeof window !== 'undefined') {
+      // Para Windows, usar caminho típico dos Downloads
+      if (navigator.userAgent.includes('Windows')) {
+        return 'C:\\Users\\%USERNAME%\\Downloads'
+      } else {
+        // Para outros sistemas, manter apenas "Downloads"
+        return 'Downloads'
+      }
+    }
+
+    return defaultDir
+  })
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file)
@@ -43,7 +60,7 @@ export default function Home() {
       URL.revokeObjectURL(pdfUrl)
       setPdfUrl(null)
     }
-    
+
     // Detectar número de páginas do PDF para ajustar página final
     try {
       const { getDocument } = await import('pdfjs-dist')
@@ -105,6 +122,7 @@ export default function Home() {
       formData.append('endPage', endPage.toString())
       formData.append('acordaoNumber', acordaoNumber)
       formData.append('rvNumber', rvNumber)
+      formData.append('inputDirectory', inputDirectory)
 
       const response = await fetch('/api/process-pdf', {
         method: 'POST',
@@ -116,7 +134,9 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Erro no processamento do arquivo')
+        setResult(errorData.error || 'Erro no processamento do arquivo')
+        setProgress(0)
+        return
       }
 
       const result = await response.blob()
@@ -125,14 +145,6 @@ export default function Home() {
       // Criar URL para visualização
       const url = URL.createObjectURL(result)
       setPdfUrl(url)
-
-      // Também fazer download
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Acordao-${acordaoNumber}-RV-${rvNumber}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
 
       setProgress(100)
       setResult('PDF processado com sucesso!')
@@ -239,13 +251,9 @@ export default function Home() {
     }
   }
 
-  const clearSelections = () => {
-    setSelectedAreas([])
-  }
-
   const downloadOriginalPdf = () => {
     if (!mergedFile || !pdfUrl) return
-    
+
     const a = document.createElement('a')
     a.href = pdfUrl
     a.download = `Acordao-${acordaoNumber}-RV-${rvNumber}-Original.pdf`
@@ -257,25 +265,42 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">JURFIS - Processamento de PDFs</h1>
-          <p className="text-gray-600 text-sm mt-1">Extração, junção e anonimização de documentos</p>
-        </div>
+        {/* Header - apenas quando não está visualizando PDF */}
+        {!showPdfViewer && (
+          <div className="flex justify-between items-center mb-6">
+            {/* Título à esquerda */}
+            <div className="text-left">
+              <h1 className="text-2xl font-bold text-gray-900">JURFIS - Processamento de PDFs</h1>
+              <p className="text-gray-600 text-sm mt-1">Extração, junção e anonimização de documentos</p>
+            </div>
+
+            {/* Configuração de diretório de entrada */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Diretório do Acórdão:</span>
+              <Input
+                placeholder="Digite o caminho da pasta"
+                value={inputDirectory}
+                onChange={(e) => setInputDirectory(e.target.value)}
+                className="text-sm w-[20rem] h-8"
+                title={`Padrão: ${inputDirectory}`}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Layout responsivo - muda quando PDF é processado */}
         {showPdfViewer ? (
           // Layout com mini menu à esquerda e visualizador à direita
-          <div className="flex gap-4 h-[calc(100vh-120px)]">
+          <div className="flex gap-4 h-[calc(100vh-32px)]">
             {/* Mini menu à esquerda */}
             <div className="w-80 bg-white rounded-lg shadow-sm border p-4 flex-shrink-0 overflow-y-auto">
               <div className="space-y-4">
-                
+
                 {/* Botão para voltar */}
-                <Button 
+                <Button
                   onClick={resetToInitialState}
-                  variant="outline" 
-                  className="w-full text-sm"
+                  variant="outline"
+                  className="w-full text-sm cursor-pointer"
                   size="sm"
                 >
                   ← Novo Processamento
@@ -301,27 +326,19 @@ export default function Home() {
                     <p>3. As áreas selecionadas serão marcadas em vermelho</p>
                     <p>4. Clique em "Anonimizar" para aplicar tarjas pretas permanentes</p>
                   </div>
-                  
-                  <div className="bg-blue-50 p-3 rounded text-xs">
-                    <p className="font-medium text-blue-800">Áreas selecionadas: {selectedAreas.length}</p>
-                    {selectedAreas.length > 0 && (
-                      <p className="text-blue-600 mt-1">
-                        Distribuídas em {new Set(selectedAreas.map(a => a.pageNumber)).size} página(s)
-                      </p>
-                    )}
-                  </div>
+
                 </div>
 
                 {/* Controles de download e anonimização */}
                 <div className="space-y-3 border-t pt-4">
-                  <Button 
+                  <Button
                     onClick={downloadOriginalPdf}
                     variant="outline"
-                    className="w-full text-sm" 
+                    className="w-full text-sm cursor-pointer"
                     size="sm"
                     disabled={!mergedFile}
                   >
-                    📄 Baixar PDF Original
+                    📄 Baixar PDF Mesclado
                   </Button>
 
                   {isAnonymizing && (
@@ -338,9 +355,9 @@ export default function Home() {
                     </div>
                   )}
 
-                  <Button 
+                  <Button
                     onClick={handleAnonymize}
-                    className="w-full text-sm" 
+                    className="w-full text-sm cursor-pointer"
                     size="sm"
                     disabled={!mergedFile || selectedAreas.length === 0 || isAnonymizing}
                   >
@@ -351,11 +368,10 @@ export default function Home() {
                 {/* Resultado */}
                 {result && (
                   <div className="border-t pt-4">
-                    <div className={`p-3 rounded-md text-xs ${
-                      result.includes('Erro') 
-                        ? 'bg-red-50 text-red-700 border border-red-200' 
-                        : 'bg-green-50 text-green-700 border border-green-200'
-                    }`}>
+                    <div className={`p-3 rounded-md text-xs ${result.includes('Erro') || result.includes('não encontrado') || result.includes('Falha')
+                      ? 'bg-red-50 text-red-700 border border-red-200'
+                      : 'bg-green-50 text-green-700 border border-green-200'
+                      }`}>
                       {result}
                     </div>
                   </div>
@@ -366,8 +382,8 @@ export default function Home() {
             {/* Visualizador de PDF à direita */}
             <div className="flex-1 bg-white rounded-lg shadow-sm border overflow-hidden">
               {pdfUrl ? (
-                <PdfViewer 
-                  pdfUrl={pdfUrl} 
+                <PdfViewer
+                  pdfUrl={pdfUrl}
                   onSelectionChange={handleSelectionChange}
                 />
               ) : (
@@ -461,7 +477,7 @@ export default function Home() {
                     <Button
                       onClick={handleProcess}
                       disabled={isProcessing}
-                      className="w-full text-sm py-2"
+                      className="w-full text-sm py-2 cursor-pointer"
                       size="sm"
                     >
                       {isProcessing ? 'Processando...' : 'Mesclar PDF'}
@@ -476,7 +492,7 @@ export default function Home() {
             {/* Resultado */}
             {result && !showPdfViewer && (
               <div className="mt-6 pt-6 border-t">
-                <div className={`p-3 rounded-md text-sm ${result.includes('Erro') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+                <div className={`p-3 rounded-md text-sm ${result.includes('Erro') || result.includes('não encontrado') || result.includes('Falha') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
                   }`}>
                   {result}
                 </div>
