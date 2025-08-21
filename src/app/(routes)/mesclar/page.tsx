@@ -458,18 +458,6 @@ export default function MergePdfPage() {
                   ← Voltar à Seleção
                 </Button>
               </div>
-
-              {/* Resultado */}
-              {result && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className={`p-3 rounded-md text-xs ${result.includes('Erro') || result.includes('Falha')
-                    ? 'bg-red-50 text-red-700 border border-red-200'
-                    : 'bg-green-50 text-green-700 border border-green-200'
-                    }`}>
-                    {result}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}

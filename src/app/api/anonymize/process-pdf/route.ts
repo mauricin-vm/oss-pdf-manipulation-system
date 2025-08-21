@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
       let acordaoBuffer: Buffer | null = null;
       try {
         acordaoBuffer = await fileService.findAcordaoFile(acordaoFileName);
-      } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 404 });
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : `Erro desconhecido`;
+        return NextResponse.json({ error: errorMessage }, { status: 404 });
       };
       if (!acordaoBuffer) return NextResponse.json({ error: `Acórdão não encontrado na pasta selecionada. O arquivo deve estar no formato "RV ${rvNumber}.pdf" ou "Acórdão ${acordaoNumber} RV ${rvNumber}.pdf"` }, { status: 404 });
       finalPdfBuffer = await pdfService.mergePdfs(acordaoBuffer, extractedPagesBuffer);

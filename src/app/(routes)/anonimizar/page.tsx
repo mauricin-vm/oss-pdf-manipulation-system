@@ -233,7 +233,7 @@ export default function AnonymizationPage() {
       };
 
       const resultBlob = await response.blob();
-      const filename = ignoreAcordaoMerge 
+      const filename = ignoreAcordaoMerge
         ? `Documento Selecionado - Anonimizado.pdf`
         : `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
       const url = URL.createObjectURL(resultBlob);
@@ -260,7 +260,7 @@ export default function AnonymizationPage() {
 
     const a = document.createElement(`a`);
     a.href = pdfUrl;
-    a.download = ignoreAcordaoMerge 
+    a.download = ignoreAcordaoMerge
       ? `Documento Selecionado.pdf`
       : `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
     document.body.appendChild(a);
@@ -356,7 +356,7 @@ export default function AnonymizationPage() {
                     <p>1. Visualize o PDF ao lado</p>
                     <p>2. Clique e arraste para selecionar áreas sensíveis</p>
                     <p>3. As áreas selecionadas serão marcadas em vermelho</p>
-                    <p>4. Clique em "Anonimizar" para aplicar tarjas pretas permanentes</p>
+                    <p>4. Clique em &quot;Anonimizar&quot; para aplicar tarjas pretas permanentes</p>
                   </div>
 
                 </div>

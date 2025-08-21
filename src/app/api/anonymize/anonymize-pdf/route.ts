@@ -24,7 +24,14 @@ export async function POST(request: NextRequest) {
     const pdfBytes = await pdfDoc.save();
     const filename = `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
 
-    return new NextResponse(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename='${filename}'` } });
+    // Criar uma cópia do buffer usando slice()
+    const blob = new Blob([pdfBytes.slice()], { type: `application/pdf` });
+    return new NextResponse(blob, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`
+      }
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: `Erro interno!` }, { status: 500 });

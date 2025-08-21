@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
     const mergedFiles: Uint8Array[] = [];
     let currentPdf = await PDFDocument.create();
     let currentSize = 0;
-    let currentFileIndex = 0;
     for (const fileInfo of files) {
       try {
         const arrayBuffer = await fileInfo.file.arrayBuffer();
@@ -68,7 +67,6 @@ export async function POST(request: NextRequest) {
               mergedFiles.push(new Uint8Array(currentPdfBytes));
               currentPdf = await PDFDocument.create();
               currentSize = 0;
-              currentFileIndex++;
             };
 
             const [pageToAdd] = await currentPdf.copyPages(sourcePdf, [pageIndex]);
@@ -80,7 +78,6 @@ export async function POST(request: NextRequest) {
 
               currentPdf = await PDFDocument.create();
               currentSize = 0;
-              currentFileIndex++;
             };
           };
         };
@@ -98,7 +95,13 @@ export async function POST(request: NextRequest) {
 
     if (mergedFiles.length === 0) return NextResponse.json({ error: `Nenhum PDF foi gerado` }, { status: 500 });
     if (mergedFiles.length === 1) {
-      return new NextResponse(mergedFiles[0], { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="PDF_Mesclado.pdf"' } })
+      const blob = new Blob([mergedFiles[0].slice()], { type: `application/pdf` });
+      return new NextResponse(blob, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'attachment; filename="PDF_Mesclado.pdf"'
+        }
+      });
     } else {
       const base64Files = mergedFiles.map(pdfBytes => Buffer.from(pdfBytes).toString(`base64`));
       return NextResponse.json({ message: `${mergedFiles.length} arquivos PDF foram gerados respeitando o limite de tamanho`, files: base64Files, count: mergedFiles.length });

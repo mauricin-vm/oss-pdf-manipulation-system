@@ -8,6 +8,10 @@ import { useState, useRef, useCallback } from 'react';
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
 
 //função principal
+interface PDFPageProxy {
+  originalWidth: number,
+  originalHeight: number
+};
 interface SelectionArea {
   id: string,
   x: number,
@@ -40,7 +44,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
 
   //funções de gerenciamento do visualizador
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => setNumPages(numPages);
-  const onPageLoadSuccess = (page: any) => setPageSize({ width: page.originalWidth, height: page.originalHeight });
+  const onPageLoadSuccess = (page: PDFPageProxy) => setPageSize({ width: page.originalWidth, height: page.originalHeight });
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
     if (!pageRef.current || !pageSize) return;
     const rect = pageRef.current.getBoundingClientRect();
