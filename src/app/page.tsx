@@ -21,7 +21,7 @@ export default function Home() {
 
           {/* Card Mesclar PDFs */}
           <Link href="/mesclar">
-            <Card className="h-full cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-200">
+            <Card className="h-full cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-green-200 py-6">
               <CardHeader className="text-center">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-3xl">📖</span>
@@ -44,7 +44,7 @@ export default function Home() {
 
           {/* Card Anonimização de PDFs */}
           <Link href="/anonimizar">
-            <Card className="h-full cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-200">
+            <Card className="h-full cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-200 py-6">
               <CardHeader className="text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-3xl">🔒</span>
