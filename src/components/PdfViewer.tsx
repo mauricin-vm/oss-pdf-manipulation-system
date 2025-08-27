@@ -25,9 +25,10 @@ interface SelectionArea {
 };
 interface PdfViewerProps {
   pdfUrl: string,
-  onSelectionChange: (selections: SelectionArea[]) => void
+  onSelectionChange: (selections: SelectionArea[]) => void,
+  disabled?: boolean
 };
-export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps) {
+export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false }: PdfViewerProps) {
 
   //definir constantes
   const [numPages, setNumPages] = useState<number>(0)
@@ -46,14 +47,14 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => setNumPages(numPages);
   const onPageLoadSuccess = (page: PDFPageProxy) => setPageSize({ width: page.originalWidth, height: page.originalHeight });
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
-    if (!pageRef.current || !pageSize) return;
+    if (!pageRef.current || !pageSize || disabled) return;
     const rect = pageRef.current.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     setIsSelecting(true);
     setSelectionStart({ x, y });
     setCurrentSelection({ x, y, width: 0, height: 0 });
-  }, [pageSize]);
+  }, [pageSize, disabled]);
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     if (!isSelecting || !selectionStart || !pageRef.current) return;
     const rect = pageRef.current.getBoundingClientRect();
@@ -110,7 +111,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         <div className="flex items-center gap-4">
           <button
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage <= 1}
+            disabled={currentPage <= 1 || disabled}
             className="h-8 px-3 py-1 bg-gray-900 text-white rounded disabled:bg-gray-300 text-sm cursor-pointer"
           >
             ← Anterior
@@ -122,7 +123,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
 
           <button
             onClick={() => setCurrentPage(Math.min(numPages, currentPage + 1))}
-            disabled={currentPage >= numPages}
+            disabled={currentPage >= numPages || disabled}
             className="h-8 px-3 py-1 bg-gray-900 text-white rounded disabled:bg-gray-300 text-sm cursor-pointer"
           >
             Próxima →
@@ -133,7 +134,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         <div className="flex items-center gap-2">
           <button
             onClick={handleZoomOut}
-            disabled={scale <= 0.5}
+            disabled={scale <= 0.5 || disabled}
             className="w-8 h-8 bg-gray-900 text-white rounded text-sm disabled:bg-gray-300 flex items-center justify-center cursor-pointer"
           >
             -
@@ -145,7 +146,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
 
           <button
             onClick={handleZoomIn}
-            disabled={scale >= 3.0}
+            disabled={scale >= 3.0 || disabled}
             className="w-8 h-8 bg-gray-900 text-white rounded text-sm disabled:bg-gray-300 flex items-center justify-center cursor-pointer"
           >
             +
@@ -155,7 +156,8 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         <div className="flex items-center gap-2">
           <button
             onClick={clearSelections}
-            className="h-8 px-3 py-1 bg-red-500 text-white rounded text-sm cursor-pointer"
+            disabled={disabled}
+            className="h-8 px-3 py-1 bg-red-500 text-white rounded text-sm disabled:bg-gray-300 cursor-pointer"
           >
             Limpar Todas
           </button>
@@ -167,7 +169,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
         <div className="flex justify-center p-4">
           <div
             ref={pageRef}
-            className="relative cursor-crosshair"
+            className={`relative ${disabled ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -193,14 +195,14 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
               .map(selection => (
                 <div
                   key={selection.id}
-                  className="absolute border-2 border-red-500 bg-red-200 bg-opacity-30 cursor-pointer group"
+                  className={`absolute border-2 border-red-500 bg-red-200 bg-opacity-30 group ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   style={{
                     left: selection.x * scale,
                     top: selection.y * scale,
                     width: selection.width * scale,
                     height: selection.height * scale,
                   }}
-                  onClick={() => removeSelection(selection.id)}
+                  onClick={() => !disabled && removeSelection(selection.id)}
                 >
                   <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                     Clique para remover
@@ -239,7 +241,8 @@ export default function PdfViewer({ pdfUrl, onSelectionChange }: PdfViewerProps)
                 </span>
                 <button
                   onClick={() => removeSelection(selection.id)}
-                  className="text-red-500 hover:text-red-700 cursor-pointer"
+                  disabled={disabled}
+                  className="text-red-500 hover:text-red-700 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   ✕
                 </button>

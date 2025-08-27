@@ -318,6 +318,7 @@ export default function AnonymizationPage() {
                     variant="outline"
                     className="w-full text-sm cursor-pointer mb-2"
                     size="sm"
+                    disabled={isAnonymizing}
                   >
                     ← Menu Principal
                   </Button>
@@ -329,6 +330,7 @@ export default function AnonymizationPage() {
                   variant="outline"
                   className="w-full text-sm cursor-pointer"
                   size="sm"
+                  disabled={isAnonymizing}
                 >
                   Novo Processamento
                 </Button>
@@ -368,7 +370,7 @@ export default function AnonymizationPage() {
                     variant="outline"
                     className="w-full text-sm cursor-pointer"
                     size="sm"
-                    disabled={!mergedFile}
+                    disabled={!mergedFile || isAnonymizing}
                   >
                     📄 Baixar PDF Mesclado
                   </Button>
@@ -417,6 +419,7 @@ export default function AnonymizationPage() {
                 <PdfViewer
                   pdfUrl={pdfUrl}
                   onSelectionChange={handleSelectionChange}
+                  disabled={isAnonymizing}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-500">

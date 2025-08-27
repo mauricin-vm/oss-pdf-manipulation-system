@@ -215,7 +215,10 @@ export default function MergePdfPage() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <Link href="/" className="text-blue-600 hover:text-blue-800 text-sm">
+            <Link 
+              href="/" 
+              className={`text-sm ${isProcessing ? 'text-gray-400 pointer-events-none cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'}`}
+            >
               ← Voltar ao Menu
             </Link>
           </div>
@@ -441,6 +444,7 @@ export default function MergePdfPage() {
                 {mergedFiles.length > 0 && (
                   <Button
                     onClick={downloadMergedFiles}
+                    disabled={isProcessing}
                     variant="outline"
                     className="w-full cursor-pointer"
                     size="sm"
@@ -451,6 +455,7 @@ export default function MergePdfPage() {
 
                 <Button
                   onClick={() => setShowOrganizer(false)}
+                  disabled={isProcessing}
                   variant="outline"
                   className="w-full cursor-pointer"
                   size="sm"
