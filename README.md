@@ -1,6 +1,6 @@
 # PDF Processing System
 
-System developed to process PDF files from winning votes, extract specific pages and merge them with complete court decisions. Features advanced OCR-powered anonymization for LGPD compliance.
+System developed to process PDF files from winning votes, extract specific pages and merge them with complete court decisions. Features interactive anonymization for LGPD compliance.
 
 ## 🚀 Features
 
@@ -8,15 +8,17 @@ System developed to process PDF files from winning votes, extract specific pages
 - **Page Selection**: Specify the page range of the winning vote
 - **Automatic Search**: Automatically locates the complete court decision based on decision number and RV
 - **File Merging**: Merges the complete court decision with the winning vote pages
-- **OCR Text Extraction**: Advanced OCR using Google Cloud Vision API for scanned documents
-- **AI-Powered Anonymization**: Uses Gemini AI to anonymize sensitive data while preserving legal content
-- **LGPD Compliance**: Automatically removes CPF, names, addresses, and financial information
+- **Interactive Anonymization**: Select specific areas on PDF pages to redact using PyMuPDF
+- **Precise Redaction**: Uses PyMuPDF for permanent black redaction blocks over selected areas
+- **LGPD Compliance**: Manual selection ensures complete control over sensitive data removal
 - **Automatic Download**: Generates and downloads the final merged PDF
 
 ## 📋 Prerequisites
 
 - Node.js 18+ 
 - NPM or Yarn
+- Python 3.7+
+- PyMuPDF (installed via pip)
 
 ## 🛠️ Installation
 
@@ -26,46 +28,28 @@ git clone [repository-url]
 cd anonymization-system
 ```
 
-2. Install dependencies:
+2. Install Node.js dependencies:
 ```bash
 npm install
 ```
 
-3. Configure environment variables:
+3. Install Python dependencies:
+```bash
+pip install PyMuPDF
+```
+
+4. Configure environment variables:
 ```bash
 cp .env.example .env.local
 ```
 
-4. Edit the `.env.local` file and configure the required services:
+5. Edit the `.env.local` file and configure the required services:
 ```env
-# Google Gemini AI API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Google Cloud Vision API (for OCR on scanned PDFs)
-GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
-
 # Directory for court decisions
 ACCORDES_DIRECTORY=./accordes
 ```
 
-### Setting up Google Cloud Vision API (for OCR):
-
-1. Create a Google Cloud Project: https://console.cloud.google.com/
-2. Enable the Vision API: https://console.cloud.google.com/apis/library/vision.googleapis.com
-3. Create a service account:
-   - Go to "IAM & Admin" > "Service Accounts"
-   - Click "Create Service Account"
-   - Give it a name and add the "Cloud Vision API User" role
-4. Generate and download the JSON key file
-5. Update `GOOGLE_APPLICATION_CREDENTIALS` in `.env.local` with the path to your JSON file
-
-### Setting up Gemini AI:
-
-1. Visit https://aistudio.google.com/app/apikey
-2. Generate an API key
-3. Add it to `GEMINI_API_KEY` in your `.env.local` file
-
-5. Create the folder for court decisions:
+6. Create the folder for court decisions:
 ```bash
 mkdir accordes
 ```
@@ -91,19 +75,19 @@ Open your browser at `http://localhost:3000`
 4. Enter the RV number (e.g., 5678-2024)
 5. Click "Process and Merge PDF"
 
-### 5. Anonymize the document (optional)
-1. After merging, click "Anonymize PDF with AI + OCR"
-2. The system will:
-   - Use OCR to extract text from scanned documents
-   - Apply AI-powered anonymization to remove sensitive data
-   - Generate a new anonymized PDF
+### 5. Anonymize the document (interactive)
+1. After merging, the system displays the PDF with interactive selection
+2. Click and drag to select areas containing sensitive information
+3. Selected areas will be highlighted in red
+4. Click "Anonimizar" to apply permanent black redactions using PyMuPDF
+5. The system will:
+   - Convert selected areas to PyMuPDF redaction format
+   - Apply permanent black redaction blocks
+   - Generate a new anonymized PDF with the specified areas blacked out
 
 ### 6. Result
 - **For PDF merging**: Downloads the merged court decision + winning vote
-- **For anonymization**: 
-  - ✅ **Success**: Downloads anonymized PDF with sensitive data removed
-  - ⚠️ **OCR Failed**: Downloads original merged PDF with notification that OCR couldn't extract text
-  - ⚠️ **AI Error**: Downloads original merged PDF if anonymization process failed
+- **For anonymization**: Downloads anonymized PDF with permanent black redactions over selected areas
 
 ## 📁 Project Structure
 
@@ -111,8 +95,9 @@ Open your browser at `http://localhost:3000`
 src/
 ├── app/
 │   ├── api/
-│   │   ├── process-pdf/    # PDF merging endpoint
-│   │   └── anonymize-pdf/  # OCR + anonymization endpoint
+│   │   └── anonymize/
+│   │       ├── process-pdf/         # PDF merging endpoint
+│   │       └── pymupdf-anonymize/   # PyMuPDF redaction endpoint
 │   ├── globals.css         # Global styles
 │   ├── layout.tsx          # Application layout
 │   └── page.tsx           # Main interface
@@ -122,9 +107,7 @@ src/
 │   └── PageRangeSelector.tsx # Page range selector
 └── lib/
     ├── file-service.ts    # File system operations
-    ├── pdf-service.ts     # PDF manipulation
-    ├── ocr-service.ts     # Google Cloud Vision OCR
-    └── gemini-service.ts  # AI-powered anonymization
+    └── pdf-service.ts     # PDF manipulation
 ```
 
 ## ⚙️ Advanced Configuration
@@ -151,23 +134,26 @@ Change the `ACCORDES_DIRECTORY` variable in `.env.local` to point to your court 
 - Check that start page is not greater than end page
 - Use valid page numbers (greater than 0)
 
-### OCR and Anonymization Issues
+### PyMuPDF Anonymization Issues
 
-#### OCR not working
-- Verify Google Cloud Vision API is properly configured
-- Check that `GOOGLE_APPLICATION_CREDENTIALS` points to a valid JSON file
-- Ensure the service account has the "Cloud Vision API User" role
-- Check the Google Cloud console for API usage and quota limits
+#### Python not found
+- Ensure Python 3.7+ is installed and available in PATH
+- Try running `python --version` or `python3 --version` in terminal
+- On Windows, make sure Python is added to system PATH
 
-#### Gemini AI errors
-- Verify your `GEMINI_API_KEY` is correct and active
-- Check rate limits on the Gemini API
-- Large documents may take several minutes to process
+#### PyMuPDF not installed
+- Install PyMuPDF using: `pip install PyMuPDF`
+- On some systems, you may need: `pip3 install PyMuPDF`
+- Verify installation with: `python -c "import fitz; print('PyMuPDF installed')"`
 
-#### Files downloaded without anonymization
-- This means either OCR failed to extract text (scanned PDF issue) or AI processing failed
-- Check browser console and server logs for specific error messages
-- For scanned PDFs, ensure image quality is sufficient for OCR
+#### Redaction not working
+- Ensure areas are properly selected on the PDF viewer
+- Check browser console for JavaScript errors during area selection
+- Verify the PDF is not corrupted or password-protected
+
+#### Permission errors
+- Ensure the application has write permissions in the temp directory
+- On Linux/Mac, check file permissions for the project folder
 
 ## 📄 License
 

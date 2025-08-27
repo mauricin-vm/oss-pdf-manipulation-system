@@ -3,7 +3,6 @@
 //importar bibliotecas e funções
 import Link from 'next/link';
 import PdfViewer from '@/components/PdfViewer';
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -157,30 +156,32 @@ export default function AnonymizationPage() {
   const handleSelectionChange = (selections: SelectionArea[]) => {
     setSelectedAreas(selections);
   };
-  const dataURLtoBlob = (dataUrl: string) => {
-    const arr = dataUrl.split(`,`);
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : `image/png`;
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new Blob([u8arr], { type: mime });
+  const convertSelectedAreasToMuPDFFormat = (areas: SelectionArea[]) => {
+    return areas.map(area => ({
+      page: area.pageNumber,
+      x: area.x,
+      y: area.y,
+      width: area.width,
+      height: area.height
+    }));
   };
   const handleAnonymize = async () => {
+
+    //verificar se existe arquivo e áreas selecionadas
     if (!mergedFile || selectedAreas.length === 0) return alert(`Selecione pelo menos uma área para anonimizar.`);
 
     setIsAnonymizing(true);
     setProgress(0);
 
     try {
+      //configurar etapas de progresso para PyMuPDF
       let currentStep = 0;
       const anonSteps = [
-        { step: 15, message: `🔒 Carregando PDF...` },
-        { step: 30, message: `🎯 Detectando áreas selecionadas...` },
-        { step: 50, message: `🛡️ Aplicando anonimização...` },
-        { step: 75, message: `🔐 Processando páginas...` },
-        { step: 90, message: `📄 Gerando PDF final...` }
+        { step: 15, message: `🔒 Preparando arquivo PDF...` },
+        { step: 30, message: `🎯 Convertendo áreas selecionadas...` },
+        { step: 50, message: `📋 Gerando redactions.json...` },
+        { step: 75, message: `🛡️ Aplicando anonimização com PyMuPDF...` },
+        { step: 90, message: `📄 Finalizando PDF...` }
       ];
       const anonInterval = setInterval(() => {
         if (currentStep < anonSteps.length) {
@@ -190,52 +191,27 @@ export default function AnonymizationPage() {
         };
       }, 400);
 
-      const pdf = await pdfjsLib.getDocument({ data: await mergedFile.arrayBuffer() }).promise;
-      const pagesImages: { pageNumber: number; dataUrl: string }[] = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
+      //converter áreas selecionadas para formato PyMuPDF
+      const muPDFRedactions = convertSelectedAreasToMuPDFFormat(selectedAreas);
 
-        const viewport = page.getViewport({ scale: 1 });
-        const canvas = document.createElement(`canvas`);
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext(`2d`)!;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const pageSelections = selectedAreas.filter(s => s.pageNumber === i);
-        ctx.fillStyle = `black`;
-        pageSelections.forEach(sel => {
-          const scaleX = viewport.width / sel.pageWidth;
-          const scaleY = viewport.height / sel.pageHeight;
-          const x = sel.x * scaleX;
-          const y = sel.y * scaleY;
-          const width = sel.width * scaleX;
-          const height = sel.height * scaleY;
-          ctx.fillStyle = `black`;
-          ctx.fillRect(x, y, width, height);
-        });
-
-        const dataUrl = canvas.toDataURL(`image/png`);
-        pagesImages.push({ pageNumber: i, dataUrl });
-      };
-
+      //preparar FormData com o PDF e as redações
       const formData = new FormData();
+      formData.append(`pdfFile`, mergedFile, `document.pdf`);
+      formData.append(`redactions`, JSON.stringify(muPDFRedactions));
       formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber);
       formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber);
-      pagesImages.forEach((p, index) => {
-        const blob = dataURLtoBlob(p.dataUrl);
-        formData.append(`page_${index + 1}`, blob, `page_${index + 1}.png`);
-      });
-      const response = await fetch(`/api/anonymize/anonymize-pdf`, { method: `POST`, body: formData });
+
+      //enviar para API
+      const response = await fetch(`/api/anonymize/pymupdf-anonymize`, { method: `POST`, body: formData });
       clearInterval(anonInterval);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erro no processo de anonimização`);
+        throw new Error(errorData.error || `Erro no processo de anonimização com PyMuPDF`);
       };
 
+      //download do PDF anonimizado
       const resultBlob = await response.blob();
-      const filename = ignoreAcordaoMerge
-        ? `Documento Selecionado - Anonimizado.pdf`
-        : `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
+      const filename = ignoreAcordaoMerge ? `Documento Selecionado - Anonimizado.pdf` : `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
       const url = URL.createObjectURL(resultBlob);
       const a = document.createElement(`a`);
       a.href = url;
@@ -244,12 +220,12 @@ export default function AnonymizationPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
       setProgress(100);
-      setResult(`✅ PDF anonimizado com sucesso! ${selectedAreas.length} áreas foram anonimizadas.`);
+      setResult(`✅ PDF anonimizado! ${selectedAreas.length} áreas foram processadas.`);
+
     } catch (error) {
       console.error(`Erro na anonimização:`, error);
-      const errorMessage = error instanceof Error ? error.message : `Erro na anonimização do arquivo`;
+      const errorMessage = error instanceof Error ? error.message : `Erro na anonimização com PyMuPDF`;
       setResult(`Erro na anonimização: ${errorMessage}`);
     } finally {
       setIsAnonymizing(false);
@@ -257,12 +233,9 @@ export default function AnonymizationPage() {
   };
   const downloadOriginalPdf = () => {
     if (!mergedFile || !pdfUrl) return;
-
     const a = document.createElement(`a`);
     a.href = pdfUrl;
-    a.download = ignoreAcordaoMerge
-      ? `Documento Selecionado.pdf`
-      : `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
+    a.download = ignoreAcordaoMerge ? `Documento Selecionado.pdf` : `Acórdão ${acordaoNumber} RV ${rvNumber} - Mesclado.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
