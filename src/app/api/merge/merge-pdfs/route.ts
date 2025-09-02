@@ -1,6 +1,6 @@
 //importar bibliotecas e funções
-import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument } from 'pdf-lib';
+import { NextRequest, NextResponse } from 'next/server';
 
 //função principal
 interface FileInfo {
@@ -15,15 +15,13 @@ export async function POST(request: NextRequest) {
     const maxSizePerFileStr = formData.get(`maxSizePerFile`) as string;
     const maxSizePerFile = maxSizePerFileStr ? parseInt(maxSizePerFileStr) : 0;
     const files: FileInfo[] = [];
-    const fileOrders: { [key: string]: number } = {};
-    formData.forEach((value, key) => {
-      if (key === `fileOrder`) {
-        const orderIndex = parseInt(value as string);
-        fileOrders[`file_${files.length}`] = orderIndex;
-      };
-    });
-    const fileEntries = formData.getAll(`files`) as File[];
+    const fileOrders: number[] = [];
 
+    formData.getAll(`fileOrder`).forEach((value) => {
+      fileOrders.push(parseInt(value as string));
+    });
+
+    const fileEntries = formData.getAll(`files`) as File[];
     for (let i = 0; i < fileEntries.length; i++) {
       const file = fileEntries[i];
       if (file && file.type === `application/pdf`) {
@@ -31,10 +29,10 @@ export async function POST(request: NextRequest) {
           const arrayBuffer = await file.arrayBuffer();
           const pdfDoc = await PDFDocument.load(arrayBuffer);
           const pages = pdfDoc.getPageCount();
-          files.push({ file, order: fileOrders[`file_${i}`] || i, pages, size: file.size });
+          files.push({ file, order: fileOrders[i] || i, pages, size: file.size });
         } catch (error) {
           console.warn(`Erro ao processar ${file.name}:`, error);
-          files.push({ file, order: fileOrders[`file_${i}`] || i, size: file.size });
+          files.push({ file, order: fileOrders[i] || i, size: file.size });
         };
       };
     };
@@ -43,43 +41,32 @@ export async function POST(request: NextRequest) {
 
     const mergedFiles: Uint8Array[] = [];
     let currentPdf = await PDFDocument.create();
-    let currentSize = 0;
+
     for (const fileInfo of files) {
       try {
         const arrayBuffer = await fileInfo.file.arrayBuffer();
         const sourcePdf = await PDFDocument.load(arrayBuffer);
         const pageCount = sourcePdf.getPageCount();
+        const pageIndices = Array.from({ length: pageCount }, (_, i) => i);
 
         if (maxSizePerFile === 0) {
-          const pageIndices = Array.from({ length: pageCount }, (_, i) => i);
           const pagesToCopy = await currentPdf.copyPages(sourcePdf, pageIndices);
           pagesToCopy.forEach(page => currentPdf.addPage(page));
         } else {
-          for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
-            const tempPdf = await PDFDocument.create();
-            const [tempPage] = await tempPdf.copyPages(sourcePdf, [pageIndex]);
-            tempPdf.addPage(tempPage);
-            const tempPdfBytes = await tempPdf.save();
-            const pageSize = tempPdfBytes.length;
+          const tempPdf = await PDFDocument.create();
+          const tempPages = await tempPdf.copyPages(sourcePdf, pageIndices);
+          tempPages.forEach(page => tempPdf.addPage(page));
+          const tempPdfBytes = await tempPdf.save();
 
-            if (currentSize + pageSize > maxSizePerFile && currentPdf.getPageCount() > 0) {
-              const currentPdfBytes = await currentPdf.save();
+          if (currentPdf.getPageCount() > 0) {
+            const currentPdfBytes = await currentPdf.save();
+            if (currentPdfBytes.length + tempPdfBytes.length > maxSizePerFile) {
               mergedFiles.push(new Uint8Array(currentPdfBytes));
               currentPdf = await PDFDocument.create();
-              currentSize = 0;
-            };
-
-            const [pageToAdd] = await currentPdf.copyPages(sourcePdf, [pageIndex]);
-            currentPdf.addPage(pageToAdd);
-            currentSize += pageSize;
-            if (currentSize > maxSizePerFile && currentPdf.getPageCount() === 1) {
-              const currentPdfBytes = await currentPdf.save();
-              mergedFiles.push(new Uint8Array(currentPdfBytes));
-
-              currentPdf = await PDFDocument.create();
-              currentSize = 0;
             };
           };
+          const pagesToAdd = await currentPdf.copyPages(sourcePdf, pageIndices);
+          pagesToAdd.forEach(page => currentPdf.addPage(page));
         };
 
       } catch (error) {

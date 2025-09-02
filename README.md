@@ -30,7 +30,7 @@ cd anonymization-system
 
 2. Install Node.js dependencies:
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 3. Install Python dependencies:

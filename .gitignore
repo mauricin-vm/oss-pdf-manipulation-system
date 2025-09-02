@@ -45,3 +45,5 @@ next-env.d.ts
 
 # temp files
 temp_page_*.pdf
+
+/src/generated/prisma

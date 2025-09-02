@@ -8,9 +8,10 @@ import { Card, CardContent } from '@/components/ui/card'
 //função principal
 interface FileUploadProps {
   onFileSelect: (file: File) => void,
-  selectedFile: File | null
+  selectedFile: File | null,
+  isProcessing?: boolean
 };
-export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
+export function FileUpload({ onFileSelect, selectedFile, isProcessing = false }: FileUploadProps) {
 
   //definir referências
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -35,10 +36,10 @@ export function FileUpload({ onFileSelect, selectedFile }: FileUploadProps) {
       <Card>
         <CardContent className="p-6">
           <div
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 py-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed border-gray-300 rounded-lg p-6 py-8 text-center hover:border-gray-400 transition-colors ${isProcessing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+            onDrop={isProcessing ? undefined : handleDrop}
+            onDragOver={isProcessing ? undefined : handleDragOver}
+            onClick={isProcessing ? undefined : () => fileInputRef.current?.click()}
           >
             <input
               ref={fileInputRef}

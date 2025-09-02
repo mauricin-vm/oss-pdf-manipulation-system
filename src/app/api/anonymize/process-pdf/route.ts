@@ -1,7 +1,7 @@
 //importar bibliotecas e funções
 import * as path from 'path';
-import { PDFService } from '@/lib/pdf-service';
-import { FileService } from '@/lib/file-service';
+import { PDFService } from '@/app/(routes)/anonimizar/hooks/pdf-service';
+import { FileService } from '@/app/(routes)/anonimizar/hooks/file-service';
 import { NextRequest, NextResponse } from 'next/server';
 
 //função principal

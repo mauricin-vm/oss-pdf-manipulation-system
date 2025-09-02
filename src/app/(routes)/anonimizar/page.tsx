@@ -2,15 +2,16 @@
 
 //importar bibliotecas e funções
 import Link from 'next/link';
-import PdfViewer from '@/components/PdfViewer';
-import { Button } from '@/components/ui/button';
+import PdfViewer from '@/app/(routes)/anonimizar/ui/PdfViewer';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useState } from 'react';
-import { FileUpload } from '@/components/FileUpload';
-import { PageRangeSelector } from '@/components/PageRangeSelector';
+import { FileUpload } from '@/app/(routes)/anonimizar/ui/FileUpload';
+import { usePdfProcessor } from '@/app/(routes)/anonimizar/hooks/pdf-processor';
+import { PageRangeSelector } from '@/app/(routes)/anonimizar/ui/PageRangeSelector';
 
 //função principal
 interface SelectionArea {
@@ -27,6 +28,7 @@ interface SelectionArea {
 export default function AnonymizationPage() {
 
   //definir constantes
+  const { pdfInfo, processPdf, reset: resetPdfProcessor } = usePdfProcessor()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [startPage, setStartPage] = useState<number>(1)
   const [endPage, setEndPage] = useState<number>(1)
@@ -40,7 +42,6 @@ export default function AnonymizationPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [selectedAreas, setSelectedAreas] = useState<SelectionArea[]>([])
   const [isAnonymizing, setIsAnonymizing] = useState(false)
-  const [pdfTotalPages, setPdfTotalPages] = useState<number | null>(null)
   const [ignoreAcordaoMerge, setIgnoreAcordaoMerge] = useState(false)
   const [inputDirectory, setInputDirectory] = useState(() => {
     const defaultDir = process.env.NEXT_PUBLIC_DEFAULT_ACORDAOS_DIRECTORY || `Downloads`;
@@ -53,36 +54,34 @@ export default function AnonymizationPage() {
 
   //funções de gerenciamento de arquivos
   const handleFileSelect = async (file: File) => {
-    setSelectedFile(file)
-    setResult(null)
-    setShowPdfViewer(false)
+    setResult(null);
+    setShowPdfViewer(false);
     if (pdfUrl) {
-      URL.revokeObjectURL(pdfUrl)
-      setPdfUrl(null)
+      URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(null);
     };
 
-    try {
-      const { getDocument } = await import(`pdfjs-dist`)
-      const arrayBuffer = await file.arrayBuffer()
-      const pdf = await getDocument({ data: arrayBuffer }).promise
-      const totalPages = pdf.numPages
-      setPdfTotalPages(totalPages)
-      setEndPage(totalPages)
-      console.log(`PDF detectado com ${totalPages} páginas`)
-    } catch (error) {
-      console.warn(`Não foi possível detectar número de páginas:`, error)
-      setPdfTotalPages(null)
-      setEndPage(1)
+    const result = await processPdf(file);
+    if (result.isValid && result.totalPages) {
+      setSelectedFile(file);
+      setEndPage(result.totalPages);
+      setResult(`PDF carregado com sucesso: ${result.totalPages} páginas.`);
+    } else {
+      setSelectedFile(null);
+      setEndPage(1);
+      setResult(result.error || `Erro ao processar PDF`);
     };
   };
   const handleProcess = async () => {
     if (!selectedFile) return alert(`Por favor, selecione um arquivo.`);
+    if (!pdfInfo.isValid || !pdfInfo.totalPages) return alert(`O PDF selecionado não foi processado corretamente. Tente selecionar o arquivo novamente.`);
     if (!ignoreAcordaoMerge && (!acordaoNumber || !rvNumber)) return alert(`Por favor, preencha os campos de Acórdão e RV.`);
     if (startPage <= 0 || endPage <= 0) return alert(`As páginas devem ser números maiores que zero.`);
     if (startPage > endPage) return alert(`A página inicial não pode ser maior que a página final.`);
+    if (endPage > pdfInfo.totalPages) return alert(`A página final não pode ser maior que o total de páginas (${pdfInfo.totalPages}).`);
 
-    setIsProcessing(true)
-    setProgress(0)
+    setIsProcessing(true);
+    setProgress(0);
 
     try {
       let currentStep = 0
@@ -101,14 +100,14 @@ export default function AnonymizationPage() {
         };
       }, 300);
 
-      const formData = new FormData()
-      formData.append(`file`, selectedFile)
-      formData.append(`startPage`, startPage.toString())
-      formData.append(`endPage`, endPage.toString())
-      formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber)
-      formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber)
-      formData.append(`inputDirectory`, inputDirectory)
-      formData.append(`ignoreAcordaoMerge`, ignoreAcordaoMerge.toString())
+      const formData = new FormData();
+      formData.append(`file`, selectedFile);
+      formData.append(`startPage`, startPage.toString());
+      formData.append(`endPage`, endPage.toString());
+      formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber);
+      formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber);
+      formData.append(`inputDirectory`, inputDirectory);
+      formData.append(`ignoreAcordaoMerge`, ignoreAcordaoMerge.toString());
 
       const response = await fetch(`/api/anonymize/process-pdf`, { method: `POST`, body: formData });
       clearInterval(progressInterval);
@@ -145,8 +144,8 @@ export default function AnonymizationPage() {
     setIsProcessing(false);
     setProgress(0);
     setIsAnonymizing(false);
-    setPdfTotalPages(null);
     setIgnoreAcordaoMerge(false);
+    resetPdfProcessor();
     if (pdfUrl) {
       URL.revokeObjectURL(pdfUrl);
       setPdfUrl(null);
@@ -174,42 +173,32 @@ export default function AnonymizationPage() {
     setProgress(0);
 
     try {
-      //configurar etapas de progresso para PyMuPDF
-      let currentStep = 0;
-      const anonSteps = [
-        { step: 15, message: `🔒 Preparando arquivo PDF...` },
-        { step: 30, message: `🎯 Convertendo áreas selecionadas...` },
-        { step: 50, message: `📋 Gerando redactions.json...` },
-        { step: 75, message: `🛡️ Aplicando anonimização com PyMuPDF...` },
-        { step: 90, message: `📄 Finalizando PDF...` }
-      ];
-      const anonInterval = setInterval(() => {
-        if (currentStep < anonSteps.length) {
-          setProgress(anonSteps[currentStep].step);
-          setResult(anonSteps[currentStep].message);
-          currentStep++;
-        };
-      }, 400);
-
-      //converter áreas selecionadas para formato PyMuPDF
+      //etapa 1: preparar dados
+      setProgress(10);
+      setResult(`🔒 Preparando arquivo PDF...`);
       const muPDFRedactions = convertSelectedAreasToMuPDFFormat(selectedAreas);
 
-      //preparar FormData com o PDF e as redações
+      //etapa 2: preparar FormData
+      setProgress(25);
+      setResult(`🎯 Convertendo ${selectedAreas.length} áreas selecionadas...`);
       const formData = new FormData();
       formData.append(`pdfFile`, mergedFile, `document.pdf`);
       formData.append(`redactions`, JSON.stringify(muPDFRedactions));
       formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber);
       formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber);
 
-      //enviar para API
+      //etapa 3: enviar para API
+      setProgress(50);
+      setResult(`🛡️ Aplicando anonimização com PyMuPDF...`);
       const response = await fetch(`/api/anonymize/pymupdf-anonymize`, { method: `POST`, body: formData });
-      clearInterval(anonInterval);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Erro no processo de anonimização com PyMuPDF`);
       };
 
-      //download do PDF anonimizado
+      //etapa 4: processar resposta
+      setProgress(80);
+      setResult(`📄 Finalizando download...`);
       const resultBlob = await response.blob();
       const filename = ignoreAcordaoMerge ? `Documento Selecionado - Anonimizado.pdf` : `Acórdão ${acordaoNumber} RV ${rvNumber} - Anonimizado.pdf`;
       const url = URL.createObjectURL(resultBlob);
@@ -220,6 +209,7 @@ export default function AnonymizationPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
       setProgress(100);
       setResult(`✅ PDF anonimizado! ${selectedAreas.length} áreas foram processadas.`);
 
@@ -227,6 +217,7 @@ export default function AnonymizationPage() {
       console.error(`Erro na anonimização:`, error);
       const errorMessage = error instanceof Error ? error.message : `Erro na anonimização com PyMuPDF`;
       setResult(`Erro na anonimização: ${errorMessage}`);
+      setProgress(0);
     } finally {
       setIsAnonymizing(false);
     };
@@ -368,7 +359,7 @@ export default function AnonymizationPage() {
                     size="sm"
                     disabled={!mergedFile || selectedAreas.length === 0 || isAnonymizing}
                   >
-                    {isAnonymizing ? '🎯 Anonimizando...' : `🎯 Anonimizar ${selectedAreas.length} Área(s)`}
+                    {isAnonymizing ? '🎯 Anonimizando...' : '🎯 Anonimizar'}
                   </Button>
                 </div>
 
@@ -413,15 +404,15 @@ export default function AnonymizationPage() {
                   <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">1</div>
                   <h3 className="font-semibold text-gray-900">Upload PDF</h3>
                 </div>
-                <FileUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} />
+                <FileUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} isProcessing={!pdfInfo.isValid && selectedFile !== null} />
               </div>
 
               {/* Etapa 2: Configuração */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 ${selectedFile ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>2</div>
-                    <h3 className={`font-semibold ${selectedFile ? 'text-gray-900' : 'text-gray-400'}`}>Configuração</h3>
+                    <div className={`w-8 h-8 ${selectedFile && pdfInfo.isValid ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>2</div>
+                    <h3 className={`font-semibold ${selectedFile && pdfInfo.isValid ? 'text-gray-900' : 'text-gray-400'}`}>Configuração</h3>
                   </div>
                   {selectedFile && (
                     <Button
@@ -438,14 +429,14 @@ export default function AnonymizationPage() {
                   )}
                 </div>
 
-                {selectedFile ? (
+                {selectedFile && pdfInfo.isValid ? (
                   <div className="space-y-3">
                     <PageRangeSelector
                       startPage={startPage}
                       endPage={endPage}
                       onStartPageChange={setStartPage}
                       onEndPageChange={setEndPage}
-                      totalPages={pdfTotalPages}
+                      totalPages={pdfInfo.totalPages}
                     />
 
                     <div className="flex items-center space-x-2">
@@ -489,18 +480,23 @@ export default function AnonymizationPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="text-gray-400 text-sm">Faça upload primeiro</div>
+                  <div className="text-gray-400 text-sm">
+                    {selectedFile && !pdfInfo.isValid
+                      ? 'Processando PDF...'
+                      : 'Faça upload de um PDF válido primeiro'
+                    }
+                  </div>
                 )}
               </div>
 
               {/* Etapa 3: Processamento */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 ${selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>3</div>
-                  <h3 className={`font-semibold ${selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'text-gray-900' : 'text-gray-400'}`}>Processamento</h3>
+                  <div className={`w-8 h-8 ${selectedFile && pdfInfo.isValid && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'} rounded-full flex items-center justify-center text-sm font-semibold`}>3</div>
+                  <h3 className={`font-semibold ${selectedFile && pdfInfo.isValid && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? 'text-gray-900' : 'text-gray-400'}`}>Processamento</h3>
                 </div>
 
-                {selectedFile && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? (
+                {selectedFile && pdfInfo.isValid && (ignoreAcordaoMerge || (acordaoNumber && rvNumber)) ? (
                   <div className="space-y-2">
                     {isProcessing && (
                       <div className="space-y-2">

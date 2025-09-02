@@ -1,8 +1,8 @@
 'use client'
 
 //importar bibliotecas e funções
-import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import Link from 'next/link';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 //função principal
 export default function Home() {
@@ -17,7 +17,30 @@ export default function Home() {
         </div>
 
         {/* Menu de opções */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+
+          {/* Card Chat de Atendimento */}
+          <Link href="/chat">
+            <Card className="h-full cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-blue-200 py-6">
+              <CardHeader className="text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">💬</span>
+                </div>
+                <CardTitle className="text-xl text-gray-900">Chat de Atendimento</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Sistema de atendimento via WhatsApp com interface completa
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-500 space-y-1">
+                  <p>• Integração com WhatsApp</p>
+                  <p>• Conversas em tempo real</p>
+                  <p>• Envio de arquivos e mensagens</p>
+                  <p>• Interface estilo WhatsApp</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Card Mesclar PDFs */}
           <Link href="/mesclar">
@@ -35,8 +58,8 @@ export default function Home() {
                 <div className="text-sm text-gray-500 space-y-1">
                   <p>• Upload de múltiplos PDFs</p>
                   <p>• Reorganização da ordem dos documentos</p>
+                  <p>• Limitação de tamanho por arquivo</p>
                   <p>• Mesclagem em arquivo único</p>
-                  <p>• Em breve...</p>
                 </div>
               </CardContent>
             </Card>

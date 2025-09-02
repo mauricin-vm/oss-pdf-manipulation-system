@@ -145,31 +145,34 @@ export default function MergePdfPage() {
     setIsProcessing(true);
     setProgress(0);
     setResult(`Iniciando mesclagem...`);
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev < 85) return Math.floor(prev + Math.random() * 10);
-        return prev;
-      });
-    }, 500);
 
     try {
+      // Progresso: Preparação (0-10%)
+      setProgress(5);
       const formData = new FormData();
       selectedFiles.forEach((pdfFile, index) => {
         formData.append(`files`, pdfFile.file);
         formData.append(`fileOrder`, index.toString());
       });
       formData.append(`maxSizePerFile`, mergeOptions.enableSizeLimit ? (mergeOptions.maxSizePerFile * 1024 * 1024).toString() : `0`);
+
+      // Progresso: Enviando arquivos (10-20%)
+      setProgress(10);
       setResult(`Enviando arquivos para processamento...`);
       const response = await fetch(`/api/merge/merge-pdfs`, { method: `POST`, body: formData });
-      clearInterval(progressInterval);
-      setProgress(90);
+
+      // Progresso: Processamento concluído (20-80%)
+      setProgress(80);
+      setResult(`Processando mesclagem...`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `Erro no processamento`);
       };
 
-      setProgress(95);
+      // Progresso: Finalizando (80-95%)
+      setProgress(90);
       setResult(`Finalizando mesclagem...`);
+
       const contentType = response.headers.get(`content-type`);
       if (contentType?.includes(`application/json`)) {
         const data = await response.json();
@@ -182,11 +185,12 @@ export default function MergePdfPage() {
         setResult(`Mesclagem concluída! 1 arquivo gerado.`);
         setMergedFiles([blob]);
       };
+
+      // Progresso: Concluído (100%)
       setProgress(100);
     } catch (error) {
       console.error(`Erro na mesclagem:`, error);
       setResult(`Erro: ${error instanceof Error ? error.message : `Falha na mesclagem`}`);
-      clearInterval(progressInterval);
     } finally {
       setIsProcessing(false);
     };
@@ -215,8 +219,8 @@ export default function MergePdfPage() {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <Link 
-              href="/" 
+            <Link
+              href="/"
               className={`text-sm ${isProcessing ? 'text-gray-400 pointer-events-none cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'}`}
             >
               ← Voltar ao Menu
