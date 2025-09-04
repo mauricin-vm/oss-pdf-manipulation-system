@@ -1,9 +1,7 @@
-//importar bibliotecas e funções
 import { io, Socket } from 'socket.io-client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-
-
+// Interfaces
 interface ReceivedMessage {
   session: string;
   response: any;
@@ -16,88 +14,99 @@ interface PresenceChangedEvent {
   session: string;
 }
 
-interface UseWebSocketProps {
-  isConnected: boolean;
+interface SessionLoggedEvent {
+  status: boolean;
+  session: string;
+}
+
+interface QRCodeEvent {
+  data: string;
+  session: string;
+}
+
+// Estados de conexão simplificados
+type ConnectionStatus = 'checking' | 'server_offline' | 'qr_required' | 'connecting' | 'connected';
+
+interface ConnectionState {
+  status: ConnectionStatus;
+  qrCode: string | null;
+  sessionState: string | null; // CONNECTED, UNPAIRED, etc.
+  sessionLogged: boolean;
+}
+
+interface UseSocketProps {
   schema?: string;
 }
 
-export function useWebSocket({ isConnected, schema }: UseWebSocketProps) {
+export function useSocket({ schema = 'jurfis' }: UseSocketProps) {
   const socketRef = useRef<Socket | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryCount = useRef(0);
   const maxRetries = 5;
   const isClient = typeof window !== 'undefined';
 
-  const [isConnectedToWS, setIsConnectedToWS] = useState(false);
+  // Estados principais
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    status: 'checking',
+    qrCode: null,
+    sessionState: null,
+    sessionLogged: false
+  });
+
+
+  // Estados para mensagens e presença
+  const [newMessages, setNewMessages] = useState<any[]>([]);
+  const [messageAcks, setMessageAcks] = useState<any[]>([]);
   const [presenceState, setPresenceState] = useState<{
     chatId: string;
     isChanging: string;
   } | null>(null);
 
-  // Estados para diferentes tipos de eventos
-  const [newMessages, setNewMessages] = useState<any[]>([]);
-  const [messageAcks, setMessageAcks] = useState<any[]>([]);
-
   const handlePresenceMessage = useCallback((message: PresenceChangedEvent) => {
-
-    // Se estiver digitando
+    let presenceText = '';
+    
     if (message.state === 'composing') {
-      setPresenceState({ chatId: message.id, isChanging: 'Digitando...' });
-      return;
+      presenceText = 'Digitando...';
+    } else if (message.state === 'recording') {
+      presenceText = 'Gravando...';
+    } else if (message.state === 'available') {
+      presenceText = 'Online';
     }
 
-    // Se estiver gravando áudio
-    if (message.state === 'recording') {
-      setPresenceState({ chatId: message.id, isChanging: 'Gravando...' });
-      return;
-    }
+    setPresenceState({ chatId: message.id, isChanging: presenceText });
 
-    // Se estiver online/disponível
-    if (message.state === 'available') {
-      setPresenceState({ chatId: message.id, isChanging: 'Online' });
-      return;
+    // Auto-clear após 10 segundos
+    if (presenceText) {
+      setTimeout(() => {
+        setPresenceState(prev => 
+          prev?.chatId === message.id ? { chatId: message.id, isChanging: '' } : prev
+        );
+      }, 10000);
     }
-
-    // Se pausou ou não está disponível
-    if (message.state === 'paused' || message.state === 'unavailable') {
-      setPresenceState({ chatId: message.id, isChanging: '' });
-      return;
-    }
-
-    // Caso contrário, limpar estado
-    setPresenceState(null);
   }, []);
 
   const connectToSocket = useCallback(() => {
-    if (!isClient) {
-      return;
-    }
+    if (!isClient) return;
 
     try {
       // Evitar reconexões desnecessárias
-      if (socketRef.current?.connected) {
-        return;
-      }
+      if (socketRef.current?.connected) return;
 
-      // Desconectar socket anterior se existir
+      // Limpar socket anterior
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
 
-      // Obter URL do servidor
       const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
-
-
       if (!wsUrl) {
-        console.error('❌ NEXT_PUBLIC_WEBSOCKET_URL não está definida no .env');
+        console.error('❌ NEXT_PUBLIC_WEBSOCKET_URL não definida');
+        setConnectionState(prev => ({ ...prev, status: 'server_offline' }));
         return;
       }
 
-      // Extrair host e porta da URL WebSocket
       const url = new URL(wsUrl);
       const serverUrl = `http://${url.host}`;
-
 
       // Criar conexão Socket.IO
       socketRef.current = io(serverUrl, {
@@ -106,109 +115,258 @@ export function useWebSocket({ isConnected, schema }: UseWebSocketProps) {
         reconnection: true,
         reconnectionAttempts: maxRetries,
         reconnectionDelay: 2000,
-        forceNew: false, // Reutilizar conexão se possível
-        upgrade: true,
-        rememberUpgrade: true
+        forceNew: false
       });
 
+      // === EVENTOS DE CONEXÃO ===
       socketRef.current.on('connect', () => {
-        setIsConnectedToWS(true);
+        console.log('🔌 Socket conectado');
         retryCount.current = 0;
+        
+        // Se estava offline, resetar para checking e forçar verificação
+        setConnectionState(prev => ({ 
+          ...prev, 
+          status: 'checking',
+          qrCode: null // Limpar QR Code antigo
+        }));
 
-        // Enviar schema se fornecido (sessão do WhatsApp)
-        if (schema && socketRef.current) {
+        // Entrar na sessão
+        if (socketRef.current) {
           socketRef.current.emit('join-session', { session: schema });
+        }
+
+        // Forçar verificação de status após reconexão com retry
+        const verifyStatusWithRetry = async (attempt = 1) => {
+          const maxAttempts = 3;
+          const delay = attempt * 2000; // 2s, 4s, 6s
+          
+          setTimeout(async () => {
+            if (!socketRef.current?.connected) return;
+            
+            try {
+              console.log(`🔄 Verificação pós-reconexão (tentativa ${attempt}/${maxAttempts})`);
+              const response = await fetch('/api/chat/status');
+              
+              if (response.ok) {
+                const data = await response.json();
+                console.log('📊 Status pós-reconexão:', data);
+                
+                // Se API indica conectado, usar estado da API
+                if (data.success && data.connected) {
+                  console.log('✅ API confirma conectado - definindo status');
+                  setConnectionState(prev => ({
+                    ...prev,
+                    status: 'connected',
+                    sessionState: 'CONNECTED',
+                    sessionLogged: true
+                  }));
+                  return; // Sucesso, parar tentativas
+                } else {
+                  // Se não está conectado e é a primeira tentativa, inicializar sessão
+                  if (attempt === 1) {
+                    console.log('🚀 Sessão não conectada - inicializando automaticamente...');
+                    await initializeSession();
+                  }
+                }
+              }
+              
+              // Se não deu certo e ainda há tentativas, tentar novamente
+              if (attempt < maxAttempts) {
+                verifyStatusWithRetry(attempt + 1);
+              } else {
+                console.log('⚠️ Todas as tentativas de verificação falharam');
+              }
+            } catch (error) {
+              console.error(`❌ Erro na verificação pós-reconexão (tentativa ${attempt}):`, error);
+              
+              // Se não deu certo e ainda há tentativas, tentar novamente
+              if (attempt < maxAttempts) {
+                verifyStatusWithRetry(attempt + 1);
+              }
+            }
+          }, delay);
+        };
+        
+        verifyStatusWithRetry(1);
+      });
+
+      socketRef.current.on('disconnect', (reason) => {
+        console.log('🔌 Socket desconectado:', reason);
+        
+        if (reason === 'transport close' || reason === 'transport error') {
+          setConnectionState(prev => ({ 
+            ...prev, 
+            status: 'server_offline',
+            qrCode: null,
+            sessionState: null,
+            sessionLogged: false
+          }));
         }
       });
 
-      // Escutar mensagens recebidas
+      socketRef.current.on('connect_error', (error) => {
+        console.log('❌ Erro de conexão socket:', error.message);
+        setConnectionState(prev => ({ 
+          ...prev, 
+          status: 'server_offline',
+          qrCode: null,
+          sessionState: null,
+          sessionLogged: false
+        }));
+      });
+
+      // === EVENTOS ESPECÍFICOS DO WPPCONNECT ===
+      
+      // 1. Evento session-logged - instância iniciada
+      socketRef.current.on('session-logged', (data: SessionLoggedEvent) => {
+        if (data.session === schema) {
+          console.log('📱 Session logged:', data.status);
+          setConnectionState(prev => ({ 
+            ...prev, 
+            sessionLogged: data.status 
+          }));
+          
+          // Se session foi logada com sucesso, verificar se está conectada
+          if (data.status === true) {
+            console.log('✅ Sessão logada com sucesso - verificando se está conectada...');
+            
+            // Aguardar um pouco e verificar status via API para confirmar conexão
+            setTimeout(async () => {
+              try {
+                const response = await fetch('/api/chat/status');
+                if (response.ok) {
+                  const statusData = await response.json();
+                  console.log('📊 Status após session-logged:', statusData);
+                  
+                  if (statusData.success && statusData.connected) {
+                    console.log('🎉 Confirmado: WhatsApp conectado após QR Code!');
+                    setConnectionState(prev => ({
+                      ...prev,
+                      status: 'connected',
+                      sessionState: 'CONNECTED',
+                      sessionLogged: true,
+                      qrCode: null // Limpar QR Code
+                    }));
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Erro ao verificar status após session-logged:', error);
+              }
+            }, 2000); // Aguardar 2s para garantir que a sessão foi totalmente iniciada
+          }
+        }
+      });
+
+      // 2. Evento state-${session} - estados da sessão
+      socketRef.current.on(`state-${schema}`, (client: any, state: string) => {
+        console.log('📱 Estado da sessão:', state);
+        
+        const newStatus = state === 'CONNECTED' ? 'connected' :
+                         state === 'UNPAIRED' || state === 'UNPAIRED_IDLE' ? 'qr_required' :
+                         state === 'OPENING' || state === 'PAIRING' ? 'connecting' :
+                         state === 'CONFLICT' || state === 'TIMEOUT' || state === 'DEPRECATED_VERSION' ? 'qr_required' :
+                         'checking';
+        
+        setConnectionState(prev => ({ 
+          ...prev, 
+          sessionState: state,
+          status: newStatus,
+          // Quando conectado, garantir que sessionLogged também seja true e limpar QR Code
+          sessionLogged: state === 'CONNECTED' ? true : prev.sessionLogged,
+          qrCode: state === 'CONNECTED' ? null : prev.qrCode
+        }));
+
+        // Se recebeu CONNECTED diretamente, também fazer log de sucesso
+        if (state === 'CONNECTED') {
+          console.log('🎉 Estado CONNECTED recebido - WhatsApp conectado!');
+        }
+      });
+
+      // 3. Evento qrCode - QR Code gerado
+      socketRef.current.on('qrCode', (data: QRCodeEvent) => {
+        if (data.session === schema) {
+          console.log('🔗 QR Code recebido');
+          setConnectionState(prev => ({ 
+            ...prev, 
+            qrCode: data.data,
+            status: 'qr_required'
+          }));
+        }
+      });
+
+      // === EVENTOS DE MENSAGENS ===
+      
+      // Mensagens recebidas
       socketRef.current.on(`received-message-${schema}`, (data: ReceivedMessage) => {
-        setNewMessages(prev => [...prev.slice(-49), data.response]); // Manter últimas 50
+        setNewMessages(prev => [...prev.slice(-49), data.response]);
       });
 
-      // Escutar mudanças de presença
-      socketRef.current.on(`onpresencechanged-${schema}`, (data: PresenceChangedEvent) => {
-        handlePresenceMessage(data);
-      });
-
-      // Escutar ACKs de mensagens
+      // ACKs de mensagens
       socketRef.current.on(`onack-${schema}`, (ackData: any) => {
-
-        // Normalizar estrutura do ACK
         const normalizedAck = {
           id: ackData.id?._serialized || ackData.id,
           ack: ackData.ack
         };
-
         setMessageAcks(prev => [...prev.slice(-49), normalizedAck]);
       });
 
-      // Log de todos os eventos recebidos para debug
-      socketRef.current.onAny((eventName, ...args) => {
-        if (eventName.includes('ack') || eventName.includes('Ack')) {
-        }
+      // Mudanças de presença
+      socketRef.current.on(`onpresencechanged-${schema}`, (data: PresenceChangedEvent) => {
+        handlePresenceMessage(data);
       });
 
-      // Escutar ligações
+      // Outros eventos
       socketRef.current.on('incomingcall', (data: any) => {
-        console.log('📞 Ligação recebida:', data);
+        console.log('📞 Chamada recebida:', data);
       });
 
-      // Escutar reações
-      socketRef.current.on('onreactionmessage', (data: any) => {
-        console.log('😍 Reação recebida:', data);
-      });
-
-      // Escutar mensagens revogadas
       socketRef.current.on(`onrevokedmessage-${schema}`, (data: any) => {
         console.log('🗑️ Mensagem revogada:', data);
       });
 
-      socketRef.current.on('disconnect', (reason) => {
-        console.log('🔌 Socket.IO desconectado:', reason);
-        setIsConnectedToWS(false);
-      });
-
-      socketRef.current.on('connect_error', (error) => {
-        console.error('❌ Erro na conexão Socket.IO:', error.message);
-        console.error('Servidor tentado:', serverUrl);
-        setIsConnectedToWS(false);
-      });
-
     } catch (error) {
-      console.error('Erro ao criar Socket.IO:', error);
+      console.error('❌ Erro ao criar socket:', error);
+      setConnectionState(prev => ({ ...prev, status: 'server_offline' }));
     }
-  }, [isClient, schema, handlePresenceMessage]); // Remover isConnected das dependências
+  }, [isClient, schema, handlePresenceMessage]);
 
-  // Função para registrar callback de presença (compatibilidade com código antigo)
+  // Conectar automaticamente
+  useEffect(() => {
+    connectToSocket();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [connectToSocket]);
+
+  // Função para registrar callback de presença (compatibilidade)
   const getPresence = useCallback((callback: (err: any, message: any) => void, sessionName?: string) => {
-    if (!socketRef.current) {
-      return () => { };
-    }
+    if (!socketRef.current) return () => {};
 
-    const session = sessionName || schema || 'default';
+    const session = sessionName || schema;
     const eventName = `onpresencechanged-${session}`;
 
-    console.log('📡 Registrando escuta de presença para:', eventName);
-
     const handleMessage = (data: PresenceChangedEvent) => {
-      // Converter para formato compatível com código antigo
       const compatibleMessage = {
         id: data.id,
         state: data.state === 'composing' ? 'typing' :
-          data.state === 'recording' ? 'recording_audio' :
-            data.state === 'available' ? 'online' : data.state,
+               data.state === 'recording' ? 'recording_audio' :
+               data.state === 'available' ? 'online' : data.state,
         isOnline: data.state === 'available',
         participant: data.participant,
         session: data.session
       };
-
       callback(null, compatibleMessage);
     };
 
     socketRef.current.on(eventName, handleMessage);
 
-    // Retornar função de cleanup
     return () => {
       if (socketRef.current) {
         socketRef.current.off(eventName, handleMessage);
@@ -216,43 +374,9 @@ export function useWebSocket({ isConnected, schema }: UseWebSocketProps) {
     };
   }, [schema]);
 
-  // Conectar apenas quando isConnected muda (não reconectar a cada render)
-  useEffect(() => {
-    if (isConnected && !socketRef.current?.connected) {
-      console.log('🔗 Conectando Socket.IO pela primeira vez ou após desconexão...');
-      connectToSocket();
-    } else if (!isConnected && socketRef.current?.connected) {
-      // Desconectar apenas se não estiver mais conectado
-      console.log('🔌 Desconectando Socket.IO por perda de conexão principal...');
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      setIsConnectedToWS(false);
-    }
-  }, [isConnected]); // Remover connectToSocket das dependências
-
-  // Cleanup apenas no unmount do componente
-  useEffect(() => {
-    return () => {
-      console.log('🧹 Limpando Socket.IO no unmount do componente...');
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
-
-      setIsConnectedToWS(false);
-    };
-  }, []); // Array vazio = só executa no unmount
-
-  // Função para enviar mensagem via Socket.IO
+  // Função para enviar mensagem
   const sendMessage = useCallback((message: any) => {
-    if (socketRef.current && socketRef.current.connected) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('message', message);
       return true;
     }
@@ -264,18 +388,68 @@ export function useWebSocket({ isConnected, schema }: UseWebSocketProps) {
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
     }
-
     retryCount.current = 0;
     connectToSocket();
   }, [connectToSocket]);
 
+  // Função para inicializar sessão quando necessário
+  const initializeSession = useCallback(async () => {
+    try {
+      console.log('🚀 Inicializando sessão WhatsApp...');
+      const response = await fetch('/api/chat/status', { method: 'POST' });
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('✅ Sessão inicializada:', data);
+        if (data.qrCode) {
+          setConnectionState(prev => ({ 
+            ...prev, 
+            qrCode: data.qrCode,
+            status: 'qr_required'
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao inicializar sessão:', error);
+    }
+  }, []);
+
+  // Função para gerar novo QR Code
+  const generateQRCode = useCallback(async () => {
+    try {
+      const response = await fetch('/api/chat/qr-code');
+      const data = await response.json();
+      
+      if (data.success && data.qrCode) {
+        setConnectionState(prev => ({ 
+          ...prev, 
+          qrCode: data.qrCode,
+          status: 'qr_required'
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Erro ao gerar QR Code:', error);
+    }
+  }, []);
+
   return {
-    isConnectedToWS,
-    presenceState,
+    // Estados principais
+    connectionState,
+    
+    // Estados para compatibilidade
+    isConnectedToWS: socketRef.current?.connected ?? false,
+    serverOffline: connectionState.status === 'server_offline',
+    
+    // Dados
     newMessages,
     messageAcks,
+    presenceState,
+    
+    // Funções
     getPresence,
     sendMessage,
-    reconnect
+    reconnect,
+    generateQRCode,
+    initializeSession
   };
 }

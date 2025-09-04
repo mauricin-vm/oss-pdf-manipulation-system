@@ -273,7 +273,7 @@ export default function AnonymizationPage() {
           <div className="flex gap-4 h-[calc(100vh-32px)]">
 
             {/* Mini menu à esquerda */}
-            <div className="w-80 bg-white rounded-lg shadow-sm border p-4 flex-shrink-0 overflow-y-auto">
+            <div className="w-60 bg-white rounded-lg shadow-sm border p-4 flex-shrink-0 overflow-y-auto">
               <div className="space-y-4">
 
                 {/* Botão para voltar ao menu principal */}

@@ -13,7 +13,12 @@ export async function GET(request: NextRequest) {
       connectedClients.add(controller);
 
       // Enviar header SSE inicial
-      controller.enqueue(encoder.encode('data: {"type":"connected","message":"Connection events active"}\n\n'));
+      const initialEvent = {
+        type: 'connected',
+        message: 'Connection events active',
+        timestamp: Date.now()
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialEvent)}\n\n`));
 
       // Heartbeat para manter conexão viva
       const interval = setInterval(() => {
@@ -54,13 +59,17 @@ export async function GET(request: NextRequest) {
 // Endpoint para notificar mudanças de estado
 export async function POST(request: NextRequest) {
   try {
-    const { type, state, connected } = await request.json();
+    const body = await request.json();
 
+    // Suportar tanto formato antigo quanto novo
     const eventData = {
-      type,
-      state,
-      connected,
-      timestamp: Date.now()
+      type: body.type,
+      state: body.state || body.data?.state,
+      connected: body.connected ?? (body.type === 'ready' || body.type === 'authenticated'),
+      timestamp: body.timestamp || Date.now(),
+      data: body.data,
+      source: body.source || 'api',
+      qrCode: body.data?.qrCode || body.qrCode
     };
 
     // Broadcast para todos os clientes conectados

@@ -59,7 +59,7 @@ def redact_pdf(input_pdf, output_pdf, redactions_json):
         annot = page.add_redact_annot(rect, fill=(0, 0, 0))
         page.apply_redactions()
 
-    doc.save(output_pdf)
+    doc.save(output_pdf, garbage=4, deflate=True, clean=True)
     doc.close()
 
 if __name__ == "__main__":

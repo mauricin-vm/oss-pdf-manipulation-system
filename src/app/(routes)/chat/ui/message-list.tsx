@@ -46,7 +46,9 @@ interface MessageListProps {
   hasMoreMessages?: boolean;
   isLoadingMessages?: boolean;
   isLoadingOlderMessages?: boolean;
+  isLoadingInitialMessages?: boolean;
   scrollToBottom?: boolean;
+  chatId?: string; // ID do chat selecionado para detectar mudanças
 }
 
 export function MessageList({
@@ -59,7 +61,9 @@ export function MessageList({
   hasMoreMessages,
   isLoadingMessages,
   isLoadingOlderMessages,
-  scrollToBottom
+  isLoadingInitialMessages,
+  scrollToBottom,
+  chatId
 }: MessageListProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const endMessagesRef = useRef<HTMLDivElement>(null);
@@ -69,6 +73,29 @@ export function MessageList({
   const previousScrollTop = useRef<number>(0);
   const shouldMaintainScrollPosition = useRef<boolean>(false);
   const lastLoadRequest = useRef<number>(0);
+  const [currentChatId, setCurrentChatId] = useState<string | undefined>(chatId);
+
+  // Detectar mudança de chat e forçar scroll para baixo
+  useEffect(() => {
+    if (chatId !== currentChatId) {
+      setCurrentChatId(chatId);
+      setIsInitialLoad(true);
+      setPreviousMessageCount(0);
+      previousScrollHeight.current = 0;
+      previousScrollTop.current = 0;
+      shouldMaintainScrollPosition.current = false;
+      lastLoadRequest.current = 0;
+      
+      // Forçar scroll para baixo imediatamente quando mudamos de chat
+      if (messagesContainerRef.current && endMessagesRef.current) {
+        setTimeout(() => {
+          if (endMessagesRef.current) {
+            endMessagesRef.current.scrollIntoView({ behavior: 'instant' });
+          }
+        }, 50); // Pequeno delay para garantir que o DOM foi atualizado
+      }
+    }
+  }, [chatId, currentChatId]);
 
   // Salvar posição do scroll antes de carregar mensagens antigas
   useEffect(() => {
@@ -101,10 +128,29 @@ export function MessageList({
       const isOlderMessagesLoaded = shouldMaintainScrollPosition.current;
 
       if (isInitialLoad) {
-        // Carregamento inicial - ir para o final
-        if (endMessagesRef.current) {
-          endMessagesRef.current.scrollIntoView({ behavior: 'instant' });
-        }
+        // Carregamento inicial - ir para o final com múltiplas tentativas
+        const scrollToEnd = () => {
+          if (endMessagesRef.current) {
+            endMessagesRef.current.scrollIntoView({ behavior: 'instant' });
+            
+            // Verificar se chegou ao final, se não, tentar novamente
+            setTimeout(() => {
+              const container = messagesContainerRef.current;
+              if (container && endMessagesRef.current) {
+                const isAtBottom = container.scrollTop >= container.scrollHeight - container.clientHeight - 10;
+                if (!isAtBottom) {
+                  endMessagesRef.current.scrollIntoView({ behavior: 'instant' });
+                }
+              }
+            }, 100);
+          }
+        };
+        
+        // Usar requestAnimationFrame para garantir que o DOM foi totalmente renderizado
+        requestAnimationFrame(() => {
+          requestAnimationFrame(scrollToEnd);
+        });
+        
         setIsInitialLoad(false);
       } else if (isOlderMessagesLoaded) {
         // Mensagens antigas carregadas - manter posição visual com múltiplas tentativas
@@ -210,12 +256,22 @@ export function MessageList({
         }}
       >
         <div className="relative space-y-4" style={{ zIndex: 1 }}>
-          {/* Indicador de carregamento no topo */}
-          {isLoadingMessages && hasMoreMessages && (
+          {/* Loading inicial das mensagens quando nenhuma mensagem está carregada */}
+          {isLoadingInitialMessages && messages.length === 0 && (
+            <div className="flex items-center justify-center h-64">
+              <div className="flex flex-col items-center space-y-3 text-gray-500">
+                <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                <span className="text-sm">Carregando mensagens...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Indicador de carregamento no topo para mensagens antigas - só mostra se não for loading inicial */}
+          {!isLoadingInitialMessages && isLoadingMessages && hasMoreMessages && (
             <div className="flex justify-center py-4">
               <div className="flex items-center space-x-2 text-gray-500">
                 <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                <span className="text-sm">Carregando mensagens...</span>
+                <span className="text-sm">Carregando mensagens antigas...</span>
               </div>
             </div>
           )}

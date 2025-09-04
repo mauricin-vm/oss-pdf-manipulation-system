@@ -32,40 +32,63 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
 
   //definir constantes
   const [numPages, setNumPages] = useState<number>(0)
-  const [currentPage, setCurrentPage] = useState<number>(1)
   const [selections, setSelections] = useState<SelectionArea[]>([])
   const [isSelecting, setIsSelecting] = useState(false)
-  const [selectionStart, setSelectionStart] = useState<{ x: number, y: number } | null>(null)
-  const [currentSelection, setCurrentSelection] = useState<{ x: number, y: number, width: number, height: number } | null>(null)
+  const [selectionStart, setSelectionStart] = useState<{ x: number, y: number, pageNumber: number } | null>(null)
+  const [currentSelection, setCurrentSelection] = useState<{ x: number, y: number, width: number, height: number, pageNumber: number } | null>(null)
   const [scale, setScale] = useState<number>(1.0)
-  const [pageSize, setPageSize] = useState<{ width: number, height: number } | null>(null)
+  const [pageSizes, setPageSizes] = useState<{ [key: number]: { width: number, height: number } }>({})
+  const pageRefs = useRef<{ [key: number]: HTMLDivElement | null }>({})
 
   //definir referências
-  const pageRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   //funções de gerenciamento do visualizador
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => setNumPages(numPages);
-  const onPageLoadSuccess = (page: PDFPageProxy) => setPageSize({ width: page.originalWidth, height: page.originalHeight });
-  const handleMouseDown = useCallback((event: React.MouseEvent) => {
-    if (!pageRef.current || !pageSize || disabled) return;
-    const rect = pageRef.current.getBoundingClientRect();
+  const onPageLoadSuccess = (page: PDFPageProxy, pageNumber: number) => {
+    setPageSizes(prev => ({
+      ...prev,
+      [pageNumber]: { width: page.originalWidth, height: page.originalHeight }
+    }));
+  };
+  const setPageRef = (pageNumber: number, ref: HTMLDivElement | null) => {
+    pageRefs.current[pageNumber] = ref;
+  };
+
+  const handleMouseDown = useCallback((event: React.MouseEvent, pageNumber: number) => {
+    const pageRef = pageRefs.current[pageNumber];
+    const pageSize = pageSizes[pageNumber];
+    if (!pageRef || !pageSize || disabled) return;
+    const rect = pageRef.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     setIsSelecting(true);
-    setSelectionStart({ x, y });
-    setCurrentSelection({ x, y, width: 0, height: 0 });
-  }, [pageSize, disabled]);
+    setSelectionStart({ x, y, pageNumber });
+    setCurrentSelection({ x, y, width: 0, height: 0, pageNumber });
+  }, [pageSizes, disabled]);
+
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
-    if (!isSelecting || !selectionStart || !pageRef.current) return;
-    const rect = pageRef.current.getBoundingClientRect();
+    if (!isSelecting || !selectionStart) return;
+    const pageRef = pageRefs.current[selectionStart.pageNumber];
+    if (!pageRef) return;
+    const rect = pageRef.getBoundingClientRect();
     const currentX = event.clientX - rect.left;
     const currentY = event.clientY - rect.top;
     const width = currentX - selectionStart.x;
     const height = currentY - selectionStart.y;
-    setCurrentSelection({ x: width >= 0 ? selectionStart.x : currentX, y: height >= 0 ? selectionStart.y : currentY, width: Math.abs(width), height: Math.abs(height) });
+    setCurrentSelection({
+      x: width >= 0 ? selectionStart.x : currentX,
+      y: height >= 0 ? selectionStart.y : currentY,
+      width: Math.abs(width),
+      height: Math.abs(height),
+      pageNumber: selectionStart.pageNumber
+    });
   }, [isSelecting, selectionStart]);
+
   const handleMouseUp = useCallback(() => {
-    if (!isSelecting || !currentSelection || !pageRef.current || !pageSize) return;
+    if (!isSelecting || !currentSelection) return;
+    const pageSize = pageSizes[currentSelection.pageNumber];
+    if (!pageSize) return;
     if (currentSelection.width > 5 && currentSelection.height > 5) {
       const realX = (currentSelection.x / scale)
       const realY = (currentSelection.y / scale)
@@ -77,7 +100,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
         y: realY,
         width: realWidth,
         height: realHeight,
-        pageNumber: currentPage,
+        pageNumber: currentSelection.pageNumber,
         pageWidth: pageSize.width,
         pageHeight: pageSize.height,
         scale: scale
@@ -89,7 +112,8 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
     setIsSelecting(false);
     setSelectionStart(null);
     setCurrentSelection(null);
-  }, [isSelecting, currentSelection, selections, currentPage, onSelectionChange, scale, pageSize]);
+  }, [isSelecting, currentSelection, selections, onSelectionChange, scale, pageSizes]);
+
   const clearSelections = () => {
     setSelections([]);
     onSelectionChange([]);
@@ -106,29 +130,8 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
   return (
     <div className="h-full flex flex-col">
 
-      {/* Controles de navegação e zoom */}
+      {/* Controles de zoom */}
       <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage <= 1 || disabled}
-            className="h-8 px-3 py-1 bg-gray-900 text-white rounded disabled:bg-gray-300 text-sm cursor-pointer"
-          >
-            ← Anterior
-          </button>
-
-          <span className="text-sm font-medium">
-            Página {currentPage} de {numPages}
-          </span>
-
-          <button
-            onClick={() => setCurrentPage(Math.min(numPages, currentPage + 1))}
-            disabled={currentPage >= numPages || disabled}
-            className="h-8 px-3 py-1 bg-gray-900 text-white rounded disabled:bg-gray-300 text-sm cursor-pointer"
-          >
-            Próxima →
-          </button>
-        </div>
 
         {/* Controles de zoom */}
         <div className="flex items-center gap-2">
@@ -165,64 +168,76 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
       </div>
 
       {/* Visualizador do PDF */}
-      <div className="flex-1 overflow-auto">
-        <div className="flex justify-center p-4">
-          <div
-            ref={pageRef}
-            className={`relative ${disabled ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+      <div className="flex-1 overflow-auto" ref={containerRef}>
+        <div className="flex flex-col items-center p-4 space-y-4">
+          <Document
+            file={pdfUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            className="shadow-lg"
           >
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              className="shadow-lg"
-            >
-              <Page
-                pageNumber={currentPage}
-                scale={scale}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                onLoadSuccess={onPageLoadSuccess}
-              />
-            </Document>
+            {Array.from(new Array(numPages), (el, index) => {
+              const pageNumber = index + 1;
+              return (
+                <div key={pageNumber} className="mb-4 pb-4 border-b-3 border-dashed border-gray-300 last:border-b-0">
+                  <div className="text-center mb-2">
+                    <span className="text-sm font-medium bg-gray-900 text-white px-3 py-1 rounded">
+                      Página {pageNumber}
+                    </span>
+                  </div>
+                  <div
+                    ref={(ref) => setPageRef(pageNumber, ref)}
+                    className={`relative ${disabled ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
+                    onMouseDown={(e) => handleMouseDown(e, pageNumber)}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                  >
+                    <Page
+                      pageNumber={pageNumber}
+                      scale={scale}
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                      onLoadSuccess={(page) => onPageLoadSuccess(page, pageNumber)}
+                    />
 
-            {/* Renderizar seleções da página atual */}
-            {selections
-              .filter(selection => selection.pageNumber === currentPage)
-              .map(selection => (
-                <div
-                  key={selection.id}
-                  className={`absolute border-2 border-red-500 bg-red-200 bg-opacity-30 group ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  style={{
-                    left: selection.x * scale,
-                    top: selection.y * scale,
-                    width: selection.width * scale,
-                    height: selection.height * scale,
-                  }}
-                  onClick={() => !disabled && removeSelection(selection.id)}
-                >
-                  <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                    Clique para remover
+                    {/* Renderizar seleções da página */}
+                    {selections
+                      .filter(selection => selection.pageNumber === pageNumber)
+                      .map(selection => (
+                        <div
+                          key={selection.id}
+                          className={`absolute border-2 border-red-500 bg-red-200 bg-opacity-30 group ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                          style={{
+                            left: selection.x * scale,
+                            top: selection.y * scale,
+                            width: selection.width * scale,
+                            height: selection.height * scale,
+                          }}
+                          onClick={() => !disabled && removeSelection(selection.id)}
+                        >
+                          <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            Clique para remover
+                          </div>
+                        </div>
+                      ))}
+
+                    {/* Renderizar seleção atual (enquanto arrasta) */}
+                    {currentSelection && isSelecting && currentSelection.pageNumber === pageNumber && (
+                      <div
+                        className="absolute border-2 border-blue-500 bg-blue-200 bg-opacity-30 pointer-events-none"
+                        style={{
+                          left: currentSelection.x,
+                          top: currentSelection.y,
+                          width: currentSelection.width,
+                          height: currentSelection.height,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
-              ))}
-
-            {/* Renderizar seleção atual (enquanto arrasta) */}
-            {currentSelection && isSelecting && (
-              <div
-                className="absolute border-2 border-blue-500 bg-blue-200 bg-opacity-30 pointer-events-none"
-                style={{
-                  left: currentSelection.x,
-                  top: currentSelection.y,
-                  width: currentSelection.width,
-                  height: currentSelection.height,
-                }}
-              />
-            )}
-          </div>
+              );
+            })}
+          </Document>
         </div>
       </div>
 

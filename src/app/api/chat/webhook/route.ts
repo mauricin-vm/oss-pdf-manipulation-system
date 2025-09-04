@@ -23,8 +23,33 @@ export async function POST(request: NextRequest) {
         await handleStateChange(webhookData);
         break;
 
+      // Eventos de QR Code e autenticação
+      case 'qrcode':
+        await handleQRCode(webhookData);
+        break;
+
+      case 'authenticated':
+        await handleAuthenticated(webhookData);
+        break;
+
+      case 'ready':
+        await handleReady(webhookData);
+        break;
+
+      case 'disconnected':
+        await handleDisconnected(webhookData);
+        break;
+
       default:
-        console.log('Unknown webhook event:', webhookData.event);
+
+        // Tentar processar eventos com nomes diferentes
+        if (webhookData.event?.includes('qr') || webhookData.event?.includes('QR')) {
+          await handleQRCode(webhookData);
+        } else if (webhookData.event?.includes('auth') || webhookData.event?.includes('Auth')) {
+          await handleAuthenticated(webhookData);
+        } else if (webhookData.event?.includes('ready') || webhookData.event?.includes('Ready')) {
+          await handleReady(webhookData);
+        }
     }
 
     return NextResponse.json({ success: true, received: true });
@@ -108,6 +133,78 @@ async function handleStateChange(data: any) {
   await notifyConnectionStateChange(stateData.state);
 }
 
+// Novo handler para eventos de QR Code
+async function handleQRCode(data: any) {
+
+  // Broadcast do QR Code para todos os clientes
+  const eventData = {
+    type: 'qr_code_generated',
+    qrCode: data.data?.qrcode || data.qrcode,
+    timestamp: Date.now()
+  };
+
+  await broadcastEvent(eventData);
+}
+
+// Handler para quando WhatsApp é autenticado
+async function handleAuthenticated(data: any) {
+  const eventData = {
+    type: 'authenticated',
+    timestamp: Date.now()
+  };
+  await broadcastEvent(eventData);
+
+  // Também notificar mudança de estado
+  await notifyConnectionStateChange('AUTHENTICATED');
+}
+
+// Handler para quando a sessão está pronta
+async function handleReady(data: any) {
+
+  const eventData = {
+    type: 'ready',
+    timestamp: Date.now()
+  };
+
+  await broadcastEvent(eventData);
+
+  // Também notificar mudança de estado
+  await notifyConnectionStateChange('CONNECTED');
+}
+
+// Handler para quando desconectado
+async function handleDisconnected(data: any) {
+  await broadcastEvent({
+    type: 'disconnected',
+    timestamp: Date.now()
+  });
+
+  // Também notificar mudança de estado
+  await notifyConnectionStateChange('DISCONNECTED');
+}
+
+// Função genérica para broadcast de eventos
+async function broadcastEvent(eventData: any) {
+  try {
+
+    // Broadcast via SSE endpoint
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/chat/connection-events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData)
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+    } else {
+      throw new Error(`Broadcast failed: ${response.status}`);
+    }
+
+  } catch (error) {
+    console.error('❌ Error broadcasting event:', error);
+  }
+}
+
 // Função para notificar mudanças de estado para clientes
 async function notifyConnectionStateChange(state: string) {
   try {
@@ -160,6 +257,8 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     webhook: 'active',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    info: 'Webhook está funcionando e pronto para receber eventos do wppconnect-server',
+    supportedEvents: ['qrcode', 'authenticated', 'ready', 'disconnected', 'onMessage', 'onAck', 'onPresenceUpdate', 'onStateChange']
   });
 }

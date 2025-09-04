@@ -7,12 +7,11 @@ import { Chats, Message } from '@/app/(routes)/chat/types/chat';
 
 interface MessageInputProps {
   selectedChat: { chat: Chats, isOnline: string } | null,
-  isTyping: boolean;
   onSendMessage: (message: string) => void;
   onFileUpload: (file: File) => void;
 }
 
-export function MessageInput({ selectedChat, isTyping, onSendMessage, onFileUpload }: MessageInputProps) {
+export function MessageInput({ selectedChat, onSendMessage, onFileUpload }: MessageInputProps) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -110,12 +109,6 @@ export function MessageInput({ selectedChat, isTyping, onSendMessage, onFileUplo
             <HiOutlinePaperAirplane className="w-5 h-5 text-gray-600" />
           </button>
         </div>
-
-        {isTyping && (
-          <div className="mt-2 text-xs text-gray-500 text-center">
-            Digitando...
-          </div>
-        )}
       </div>
     </div>
   );

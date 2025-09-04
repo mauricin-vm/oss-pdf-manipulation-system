@@ -9,7 +9,13 @@ const BEARER_TOKEN = process.env.WPPCONNECT_TOKEN || ``;
 //função de GET (gerar QR Code)
 export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(`${WPPCONNECT_SERVER_URL}/api/${SESSION_NAME}/start-session`, { method: `POST`, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BEARER_TOKEN}` }, body: JSON.stringify({ session: SESSION_NAME, waitQrCode: true, webhook: null }) });
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/chat/webhook`;
+    const requestBody = { session: SESSION_NAME, waitQrCode: true, webhook: webhookUrl };
+    const response = await fetch(`${WPPCONNECT_SERVER_URL}/api/${SESSION_NAME}/start-session`, {
+      method: `POST`,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BEARER_TOKEN}` },
+      body: JSON.stringify(requestBody)
+    });
     if (!response.ok) return NextResponse.json({ success: false, error: `Falha ao gerar QR Code: ${response.statusText}` }, { status: response.status });
 
     const data = await response.json();

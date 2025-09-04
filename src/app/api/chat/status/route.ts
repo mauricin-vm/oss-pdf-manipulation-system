@@ -13,8 +13,22 @@ export async function GET(request: NextRequest) {
     if (!response.ok) return NextResponse.json({ success: false, connected: false, status: `error`, error: `Falha ao verificar status: ${response.statusText}` }, { status: response.status });
 
     const data = await response.json();
-    const isConnected = data.status === `CONNECTED` || data.status === true;
-    return NextResponse.json({ success: true, connected: isConnected, status: isConnected ? `connected` : (data.status || `unknown`), session: SESSION_NAME });
+
+    // Verificação mais rigorosa de sessão conectada
+    const isConnected = data.status === `CONNECTED` ||
+      data.status === true ||
+      data.connected === true ||
+      (data.status && data.status.toString().toLowerCase() === 'connected');
+
+    const statusInfo = {
+      success: true,
+      connected: isConnected,
+      status: isConnected ? `CONNECTED` : (data.status || `unknown`),
+      session: SESSION_NAME,
+      rawData: data // Incluir dados brutos para debug
+    };
+
+    return NextResponse.json(statusInfo);
   } catch (error) {
     console.error(`Erro ao verificar status:`, error);
     return NextResponse.json({ success: false, connected: false, status: `error`, error: `Falha ao conectar ao servidor do WhatsApp!`, details: error instanceof Error ? error.message : `Erro desconhecido.` }, { status: 500 });
@@ -24,7 +38,8 @@ export async function GET(request: NextRequest) {
 //função de POST (iniciar nova sessão)
 export async function POST(request: NextRequest) {
   try {
-    const response = await fetch(`${WPPCONNECT_SERVER_URL}/api/${SESSION_NAME}/start-session`, { method: `POST`, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BEARER_TOKEN}` }, body: JSON.stringify({ session: SESSION_NAME, waitQrCode: true }) });
+    const webhookUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/chat/webhook`;
+    const response = await fetch(`${WPPCONNECT_SERVER_URL}/api/${SESSION_NAME}/start-session`, { method: `POST`, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BEARER_TOKEN}` }, body: JSON.stringify({ session: SESSION_NAME, waitQrCode: true, webhook: webhookUrl }) });
     if (!response.ok) return NextResponse.json({ success: false, error: `Falha ao iniciar sessão: ${response.statusText}` }, { status: response.status });
 
     const data = await response.json();
