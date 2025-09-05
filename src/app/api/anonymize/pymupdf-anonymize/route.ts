@@ -48,18 +48,33 @@ export async function POST(req: NextRequest) {
 import json
 import fitz  # PyMuPDF
 
+def clean_metadata(doc):
+    """Remove metadados desnecessários."""
+    try:
+        # Limpar metadados do documento
+        doc.set_metadata({})
+    except:
+        pass
+
 def redact_pdf(input_pdf, output_pdf, redactions_json):
     doc = fitz.open(input_pdf)
     with open(redactions_json, 'r', encoding='utf-8') as f:
         redactions = json.load(f)
 
+    # Tentar abordagem minimalista: redação + recompressão inteligente
     for r in redactions:
         page = doc[r['page'] - 1]
         rect = fitz.Rect(r['x'], r['y'], r['x'] + r['width'], r['y'] + r['height'])
-        annot = page.add_redact_annot(rect, fill=(0, 0, 0))
-        page.apply_redactions()
+        
+        # Aplicar redação individual imediatamente
+        page.add_redact_annot(rect, fill=(0, 0, 0))
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)  # Não processar imagens
 
-    doc.save(output_pdf, garbage=4, deflate=True, clean=True)
+    # Salvar com configurações mínimas
+    doc.save(output_pdf, 
+             garbage=4,      # Remove objetos não utilizados
+             deflate=True    # Compressão básica
+             )
     doc.close()
 
 if __name__ == "__main__":

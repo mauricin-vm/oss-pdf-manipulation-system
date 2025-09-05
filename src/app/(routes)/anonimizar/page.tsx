@@ -32,6 +32,7 @@ export default function AnonymizationPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [startPage, setStartPage] = useState<number>(1)
   const [endPage, setEndPage] = useState<number>(1)
+  const [excludedPages, setExcludedPages] = useState<string>('')
   const [acordaoNumber, setAcordaoNumber] = useState(``)
   const [rvNumber, setRvNumber] = useState(``)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -104,6 +105,7 @@ export default function AnonymizationPage() {
       formData.append(`file`, selectedFile);
       formData.append(`startPage`, startPage.toString());
       formData.append(`endPage`, endPage.toString());
+      formData.append(`excludedPages`, excludedPages);
       formData.append(`acordaoNumber`, ignoreAcordaoMerge ? `` : acordaoNumber);
       formData.append(`rvNumber`, ignoreAcordaoMerge ? `` : rvNumber);
       formData.append(`inputDirectory`, inputDirectory);
@@ -139,6 +141,7 @@ export default function AnonymizationPage() {
     setSelectedFile(null);
     setStartPage(1);
     setEndPage(1);
+    setExcludedPages('');
     setAcordaoNumber(``);
     setRvNumber(``);
     setIsProcessing(false);
@@ -189,7 +192,7 @@ export default function AnonymizationPage() {
 
       //etapa 3: enviar para API
       setProgress(50);
-      setResult(`🛡️ Aplicando anonimização com PyMuPDF...`);
+      setResult(`🛡️ Aplicando anonimização...`);
       const response = await fetch(`/api/anonymize/pymupdf-anonymize`, { method: `POST`, body: formData });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -261,6 +264,7 @@ export default function AnonymizationPage() {
                 onChange={(e) => setInputDirectory(e.target.value)}
                 className="text-sm w-[20rem] h-8"
                 title={`Padrão: ${inputDirectory}`}
+                autoComplete="off"
               />
             </div>
           </div>
@@ -310,8 +314,6 @@ export default function AnonymizationPage() {
                         <p><strong>RV:</strong> {rvNumber}</p>
                       </>
                     )}
-                    <p><strong>Páginas:</strong> {startPage} - {endPage}</p>
-                    {ignoreAcordaoMerge && <p><strong>Modo:</strong> Apenas documento selecionado</p>}
                   </div>
                 </div>
 
@@ -437,6 +439,8 @@ export default function AnonymizationPage() {
                       onStartPageChange={setStartPage}
                       onEndPageChange={setEndPage}
                       totalPages={pdfInfo.totalPages}
+                      excludedPages={excludedPages}
+                      onExcludedPagesChange={setExcludedPages}
                     />
 
                     <div className="flex items-center space-x-2">
@@ -463,6 +467,7 @@ export default function AnonymizationPage() {
                             value={acordaoNumber}
                             onChange={(e) => setAcordaoNumber(e.target.value)}
                             className="text-sm"
+                            autoComplete="off"
                           />
                         </div>
 
@@ -474,6 +479,7 @@ export default function AnonymizationPage() {
                             value={rvNumber}
                             onChange={(e) => setRvNumber(e.target.value)}
                             className="text-sm"
+                            autoComplete="off"
                           />
                         </div>
                       </>

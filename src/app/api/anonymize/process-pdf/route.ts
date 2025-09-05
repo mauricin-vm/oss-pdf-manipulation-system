@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get(`file`) as File;
     const startPage = parseInt(formData.get(`startPage`) as string);
     const endPage = parseInt(formData.get(`endPage`) as string);
+    const excludedPages = formData.get(`excludedPages`) as string || '';
     const acordaoNumber = formData.get(`acordaoNumber`) as string;
     const rvNumber = formData.get(`rvNumber`) as string;
     const inputDirectory = formData.get(`inputDirectory`) as string;
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     if (!ignoreAcordaoMerge && (!acordaoNumber || !rvNumber)) return NextResponse.json({ error: `Acórdão e RV são obrigatórios quando não ignorar mesclagem!` }, { status: 400 });
 
     const pdfService = new PDFService();
-    const extractedPagesBuffer = await pdfService.extractPages(Buffer.from(await file.arrayBuffer()), startPage, endPage);
+    const extractedPagesBuffer = await pdfService.extractPagesWithExclusions(Buffer.from(await file.arrayBuffer()), startPage, endPage, excludedPages);
     let finalPdfBuffer: Buffer;
     if (ignoreAcordaoMerge) {
       finalPdfBuffer = extractedPagesBuffer;

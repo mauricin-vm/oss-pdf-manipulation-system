@@ -36,7 +36,7 @@ export default function PdfViewer({ pdfUrl, onSelectionChange, disabled = false 
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState<{ x: number, y: number, pageNumber: number } | null>(null)
   const [currentSelection, setCurrentSelection] = useState<{ x: number, y: number, width: number, height: number, pageNumber: number } | null>(null)
-  const [scale, setScale] = useState<number>(1.0)
+  const [scale, setScale] = useState<number>(1.6)
   const [pageSizes, setPageSizes] = useState<{ [key: number]: { width: number, height: number } }>({})
   const pageRefs = useRef<{ [key: number]: HTMLDivElement | null }>({})
 

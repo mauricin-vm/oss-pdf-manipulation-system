@@ -10,21 +10,39 @@ interface PageRangeSelectorProps {
   endPage: number,
   onStartPageChange: (page: number) => void,
   onEndPageChange: (page: number) => void,
-  totalPages?: number | null
+  totalPages?: number | null,
+  excludedPages: string,
+  onExcludedPagesChange: (pages: string) => void
 };
-export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEndPageChange, totalPages }: PageRangeSelectorProps) {
+export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEndPageChange, totalPages, excludedPages, onExcludedPagesChange }: PageRangeSelectorProps) {
 
   //funções de gerenciamento do intervalo de páginas
   const handleStartPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value) || 1;
-    if (value > 0) {
-      onStartPageChange(value)
-      if (value > endPage) onEndPageChange(value);
-    };
+    const value = event.target.value.replace(/[^0-9]/g, '');
+    if (value === '') {
+      onStartPageChange(0);
+      return;
+    }
+    const numValue = parseInt(value);
+    if (!isNaN(numValue) && numValue >= 0) {
+      onStartPageChange(numValue);
+      if (numValue > endPage) onEndPageChange(numValue);
+    }
   };
   const handleEndPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value) || 1;
-    if (value >= startPage && value > 0) onEndPageChange(value);
+    const value = event.target.value.replace(/[^0-9]/g, '');
+    if (value === '') {
+      onEndPageChange(0);
+      return;
+    }
+    const numValue = parseInt(value);
+    if (!isNaN(numValue) && numValue >= 0) {
+      onEndPageChange(numValue);
+    }
+  };
+  const handleExcludedPagesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replace(/[^0-9,-\s]/g, '');
+    onExcludedPagesChange(value);
   };
 
   //retorno da função
@@ -35,12 +53,11 @@ export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEnd
           <Label htmlFor="startPage" className="text-sm">Página Inicial</Label>
           <Input
             id="startPage"
-            type="number"
-            min="1"
-            max={totalPages || undefined}
-            value={startPage}
+            type="text"
+            value={startPage === 0 ? '' : startPage.toString()}
             onChange={handleStartPageChange}
             placeholder="1"
+            autoComplete="off"
           />
         </div>
         <div className="space-y-2">
@@ -49,14 +66,24 @@ export function PageRangeSelector({ startPage, endPage, onStartPageChange, onEnd
           </Label>
           <Input
             id="endPage"
-            type="number"
-            min={startPage}
-            max={totalPages || undefined}
-            value={endPage}
+            type="text"
+            value={endPage === 0 ? '' : endPage.toString()}
             onChange={handleEndPageChange}
             placeholder={totalPages?.toString() || "1"}
+            autoComplete="off"
           />
         </div>
+      </div>
+      <div className="space-y-2 mt-4">
+        <Label htmlFor="excludedPages" className="text-sm">Páginas a Excluir (opcional)</Label>
+        <Input
+          id="excludedPages"
+          type="text"
+          value={excludedPages}
+          onChange={handleExcludedPagesChange}
+          placeholder="Ex: 3, 5, 7-9"
+          autoComplete="off"
+        />
       </div>
       <div className="text-xs text-gray-500">
         Selecione o intervalo de páginas que contém o documento para ser extraído e processado.
